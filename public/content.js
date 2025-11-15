@@ -8,7 +8,14 @@
     'accessai-focus-mode', 
     'accessai-motion-blocker', 
     'accessai-larger-targets'
+    // Note: We manage button-targeting styles directly in JS
   ];
+
+  // --- NEW: Feature-specific state ---
+  let cursorGuideEl = null;
+  let currentTargetEl = null;
+  let recognition = null;
+  // ---
 
   // 1. Load settings from storage
   function loadSettings() {
@@ -57,6 +64,9 @@
     if (!settings.enabled) {
       styleElementIds.forEach(removeStyle);
       document.documentElement.style.filter = ''; // Reset contrast
+      // Turn off running features
+      toggleButtonTargeting(false);
+      toggleVoiceCommands(false);
       return;
     }
 
@@ -86,6 +96,11 @@
     } else {
       removeStyle('accessai-larger-targets');
     }
+
+    // --- NEW: Apply new motor features ---
+    toggleButtonTargeting(settings.motor?.buttonTargeting);
+    toggleVoiceCommands(settings.motor?.voiceCommands);
+    // ---
   }
   
   // --- Feature Implementations (CSS definitions) ---
@@ -146,6 +161,193 @@
     `;
     injectStyle('accessai-larger-targets', css);
   }
+
+  // --- NEW: Feature 1: Button Targeting ---
+  
+  function getClickableElements(from) {
+    return Array.from(
+      document.querySelectorAll(
+        'a, button, [role="button"], [role="link"], [role="menuitem"], input[type="submit"], input[type="button"]'
+      )
+    ).filter(el => {
+      const rect = el.getBoundingClientRect();
+      return rect.width > 0 && rect.height > 0; // Only visible elements
+    });
+  }
+
+  function findClosestElement(x, y) {
+    const elements = getClickableElements();
+    let closest = null;
+    let minDistance = 150; // Max distance in pixels to check
+
+    for (const el of elements) {
+      const rect = el.getBoundingClientRect();
+      const elX = rect.left + rect.width / 2;
+      const elY = rect.top + rect.height / 2;
+      const distance = Math.hypot(elX - x, elY - y);
+
+      if (distance < minDistance) {
+        minDistance = distance;
+        closest = el;
+      }
+    }
+    return closest;
+  }
+
+  function updateCursorGuide(e) {
+    if (!cursorGuideEl) return;
+
+    const target = findClosestElement(e.clientX, e.clientY);
+    
+    if (target) {
+      const rect = target.getBoundingClientRect();
+      const x = rect.left + rect.width / 2;
+      const y = rect.top + rect.height / 2;
+      const size = Math.max(rect.width, rect.height, 60) * 1.25;
+
+      cursorGuideEl.style.opacity = '1';
+      cursorGuideEl.style.width = `${size}px`;
+      cursorGuideEl.style.height = `${size}px`;
+      cursorGuideEl.style.left = `${x}px`;
+      cursorGuideEl.style.top = `${y}px`;
+
+      if (target !== currentTargetEl) {
+        currentTargetEl?.classList.remove('accessai-targeted-element');
+        target.classList.add('accessai-targeted-element');
+        currentTargetEl = target;
+      }
+    } else {
+      cursorGuideEl.style.opacity = '0';
+      if (currentTargetEl) {
+        currentTargetEl.classList.remove('accessai-targeted-element');
+        currentTargetEl = null;
+      }
+      // Optional: make guide follow cursor
+      // cursorGuideEl.style.left = `${e.clientX}px`;
+      // cursorGuideEl.style.top = `${e.clientY}px`;
+      // cursorGuideEl.style.width = `40px`;
+      // cursorGuideEl.style.height = `40px`;
+    }
+  }
+
+  function toggleButtonTargeting(enable) {
+    if (enable) {
+      if (!cursorGuideEl) {
+        cursorGuideEl = document.createElement('div');
+        cursorGuideEl.id = 'accessai-cursor-guide';
+        cursorGuideEl.classList.add('accessai-cursor-guide');
+        document.body.appendChild(cursorGuideEl);
+      }
+      document.addEventListener('mousemove', updateCursorGuide);
+    } else {
+      document.removeEventListener('mousemove', updateCursorGuide);
+      if (cursorGuideEl) {
+        cursorGuideEl.remove();
+        cursorGuideEl = null;
+      }
+      if (currentTargetEl) {
+        currentTargetEl.classList.remove('accessai-targeted-element');
+        currentTargetEl = null;
+      }
+    }
+  }
+
+  // --- NEW: Feature 2: Voice Commands ---
+  
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+  function toggleVoiceCommands(enable) {
+    if (enable && SpeechRecognition) {
+      if (recognition) return; // Already running
+
+      try {
+        recognition = new SpeechRecognition();
+        recognition.continuous = true;
+        recognition.interimResults = false;
+        recognition.lang = 'en-US';
+
+        recognition.onresult = (event) => {
+          const transcript = event.results[event.results.length - 1][0].transcript.trim().toLowerCase();
+          console.log('AccessAI Voice Command:', transcript);
+          handleVoiceCommand(transcript);
+        };
+
+        recognition.onerror = (event) => {
+          console.error('AccessAI Voice Error:', event.error);
+          // Restart if it's a common error like 'no-speech'
+          if (event.error === 'no-speech' || event.error === 'network') {
+            restartRecognition();
+          }
+        };
+        
+        recognition.onend = () => {
+          // Restart recognition if it was enabled and stops
+          if (settings.enabled && settings.motor?.voiceCommands) {
+            setTimeout(restartRecognition, 100);
+          }
+        };
+        
+        recognition.start();
+
+      } catch (err) {
+        console.error("AccessAI: Speech recognition failed to start.", err);
+        alert("AccessAI: Could not start voice recognition. Please ensure microphone permissions are granted.");
+      }
+      
+    } else {
+      if (recognition) {
+        recognition.stop();
+        recognition = null;
+      }
+    }
+  }
+
+  function restartRecognition() {
+    if (recognition) {
+      try {
+        recognition.start();
+      } catch(e) {
+        console.log("AccessAI: Recognition restart failed", e);
+      }
+    }
+  }
+
+  function handleVoiceCommand(command) {
+    switch (command) {
+      case 'scroll down':
+        window.scrollBy(0, window.innerHeight * 0.7);
+        break;
+      case 'scroll up':
+        window.scrollBy(0, -window.innerHeight * 0.7);
+        break;
+      case 'go back':
+        history.back();
+        break;
+      case 'go forward':
+        history.forward();
+        break;
+      case 'go next':
+        // This is a heuristic, it might not always work
+        const nextLink = [...document.querySelectorAll('a, button')]
+          .find(el => 
+            el.textContent.toLowerCase().includes('next') || 
+            el.textContent.toLowerCase().includes('continue')
+          );
+        if (nextLink) {
+          nextLink.click();
+        } else {
+          console.log("AccessAI: Could not find a 'Next' button.");
+        }
+        break;
+      case 'click':
+        // Clicks the currently targeted element (if one is targeted)
+        if (currentTargetEl) {
+          currentTargetEl.click();
+        }
+        break;
+    }
+  }
+
 
   // 5. Initialize on load
   loadSettings();
@@ -210,5 +412,5 @@
     document.body.appendChild(popup);
   }
 
-  console.log('AccessAI content script (v3 with simplifier) loaded');
+  console.log('AccessAI content script (v4 with Targeting and Voice) loaded');
 })();
