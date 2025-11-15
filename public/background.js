@@ -8,7 +8,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     });
     return true; // Keep channel open for async response
   }
-  
+
   if (request.action === 'saveSettings') {
     chrome.storage.local.set({ extensionSettings: request.settings }, () => {
       sendResponse({ success: true });
@@ -17,9 +17,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     });
     return true;
   }
-  
+
   if (request.action === 'askAI') {
-    // This is the new chatbot backend logic (see Part 2)
     handleAIChat(request.prompt).then(sendResponse);
     return true; // Keep channel open for async response
   }
@@ -31,6 +30,15 @@ chrome.runtime.onInstalled.addListener((details) => {
     chrome.tabs.create({
       url: chrome.runtime.getURL('index.html#/onboarding')
     });
+    // Set default settings on install
+    chrome.storage.local.set({ 
+      extensionSettings: {
+        enabled: true,
+        cognitive: { simplifier: false, focusMode: false, chatbotEnabled: true },
+        visual: { contrast: 100, motionBlocker: false, altTextGenerator: false, readAloud: false },
+        motor: { largerTargets: false, voiceCommands: false, gestureControls: false }
+      }
+    });
   }
 });
 
@@ -38,7 +46,7 @@ chrome.runtime.onInstalled.addListener((details) => {
 function notifyTabsOfSettingsUpdate(settings) {
   chrome.tabs.query({}, (tabs) => {
     tabs.forEach(tab => {
-      if (tab.id) {
+      if (tab.id && tab.url && !tab.url.startsWith("chrome://")) { // Avoid restricted chrome pages
         chrome.tabs.sendMessage(tab.id, { 
           action: 'settingsUpdated', 
           settings: settings 
@@ -60,18 +68,15 @@ async function updateSettings(newSettings) {
   });
 }
 
-// --------------------------------------------------
-// PART 2: AI CHATBOT "BACKEND" LOGIC
-// --------------------------------------------------
-
+// 5. AI CHATBOT "BACKEND" LOGIC
 async function handleAIChat(prompt) {
   const lowerPrompt = prompt.toLowerCase();
-  
-  // 1. Get current settings
+
+  // Get current settings
   const result = await chrome.storage.local.get(['extensionSettings']);
   let settings = result.extensionSettings || {};
 
-  // 2. "Tool Calling" - Check if the prompt is a command
+  // "Tool Calling" - Check if the prompt is a command
   let commandResponse = null;
 
   if (lowerPrompt.includes('focus mode')) {
@@ -103,30 +108,32 @@ async function handleAIChat(prompt) {
     return { response: commandResponse, settings: settings };
   }
 
-  // 3. "Text Generation" - No command found, call an external AI
-  // This is a MOCK API call. Replace with your actual AI API (e.g., Gemini).
+  // "Text Generation" - Call your new proxy server
   try {
-    // const API_KEY = "YOUR_GEMINI_API_KEY";
-    // const response = await fetch(`https://api.example-ai.com/generate?prompt=${encodeURIComponent(prompt)}`, {
-    //   method: 'POST',
-    //   headers: { 'Authorization': `Bearer ${API_KEY}` }
-    // });
-    // const data = await response.json();
-    // return { response: data.text, settings: settings };
+    const response = await fetch("http://localhost:3001/api/chat", {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        prompt: prompt 
+      })
+    });
 
-    // --- Mock Response (Remove after adding real API) ---
-    await new Promise(resolve => setTimeout(resolve, 500)); // Simulate network delay
-    let mockResponse = "I'm not sure how to help with that. You can ask me to 'turn on focus mode' or 'disable animations'.";
-    if (lowerPrompt.includes('hello') || lowerPrompt.includes('hi')) {
-      mockResponse = "Hello! How can I help you with your accessibility needs today?";
-    } else if (lowerPrompt.includes('what can you do')) {
-       mockResponse = "I can help you control your accessibility settings. Try asking me to 'turn on focus mode' or 'make buttons bigger'.";
+    if (!response.ok) {
+      throw new Error(`Proxy server error: ${response.statusText}`);
     }
-    return { response: mockResponse, settings: settings };
-    // --- End Mock Response ---
+
+    const data = await response.json();
+
+    // This 'data.text' must match what your server sends back
+    return { response: data.text, settings: settings };
 
   } catch (error) {
-    console.error("AI API Error:", error);
+    console.error("Chat Error:", error.message);
+    if (error.message.includes('Failed to fetch')) {
+      return { response: "Sorry, I can't connect to the AI. Is the local proxy server running?", settings: settings };
+    }
     return { response: "Sorry, I'm having trouble connecting to the AI. Please try again later.", settings: settings };
   }
 }
