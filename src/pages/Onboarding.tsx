@@ -1,3 +1,5 @@
+// src/pages/Onboarding.tsx
+
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -99,16 +101,41 @@ const Onboarding = () => {
       return;
     }
 
-    // Store selections in localStorage
-    localStorage.setItem("accessibilityNeeds", JSON.stringify(selectedNeeds));
-    localStorage.setItem("onboardingComplete", "true");
+    // 1. Get the default settings
+    chrome.runtime.sendMessage({ action: 'getSettings' }, (settings) => {
+      if (!settings) {
+         toast({ title: "Error", description: "Could not load default settings. Please reload.", variant: "destructive" });
+         return;
+      }
+      
+      // 2. Modify settings based on selected needs
+      if (selectedNeeds.includes('adhd') || selectedNeeds.includes('cognitive-overload')) {
+        settings.cognitive.focusMode = true;
+      }
+      if (selectedNeeds.includes('photosensitivity')) {
+        settings.visual.motionBlocker = true;
+      }
+      if (selectedNeeds.includes('low-vision')) {
+        settings.visual.contrast = 150; // Set a default contrast
+      }
+      if (selectedNeeds.includes('motor-precision')) {
+        settings.motor.largerTargets = true;
+      }
 
-    toast({
-      title: "Preferences saved!",
-      description: "Your accessibility settings have been configured",
+      // 3. Save the *full settings object* to chrome.storage
+      chrome.runtime.sendMessage({ action: 'saveSettings', settings: settings }, (response) => {
+         if (response.success) {
+            // 4. Save onboarding status to chrome.storage
+            chrome.storage.local.set({ onboardingComplete: true }, () => {
+              toast({
+                title: "Preferences saved!",
+                description: "Your accessibility settings have been configured",
+              });
+              navigate("/");
+            });
+         }
+      });
     });
-
-    navigate("/");
   };
 
   const groupedNeeds = {
@@ -127,10 +154,6 @@ const Onboarding = () => {
           <p className="text-xl text-muted-foreground">
             Let's personalize your web experience
           </p>
-          <p className="text-muted-foreground max-w-2xl mx-auto">
-            Select the accessibility features that will help you browse more comfortably.
-            You can always adjust these settings later.
-          </p>
         </div>
 
         <div className="space-y-6">
@@ -146,7 +169,6 @@ const Onboarding = () => {
                     {category} Adaptation
                   </h2>
                 </div>
-
                 <div className="space-y-3">
                   {groupedNeeds[category].map((need) => (
                     <label
