@@ -4,7 +4,8 @@
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === 'getSettings') {
     chrome.storage.local.get(['extensionSettings'], (result) => {
-      sendResponse(result.extensionSettings || {});
+      // Return default settings if none are found
+      sendResponse(result.extensionSettings || defaultSettings);
     });
     return true; // Keep channel open for async response
   }
@@ -24,6 +25,15 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
 });
 
+// --- SETTINGS (Defaults) ---
+// We add buttonTargeting here
+const defaultSettings = {
+  enabled: true,
+  cognitive: { simplifier: false, focusMode: false, chatbotEnabled: true },
+  visual: { contrast: 100, motionBlocker: false, altTextGenerator: false, readAloud: false },
+  motor: { largerTargets: false, buttonTargeting: false, voiceCommands: false, gestureControls: false }
+};
+
 // 2. Open onboarding, set defaults, and create context menu on install
 chrome.runtime.onInstalled.addListener((details) => {
   if (details.reason === 'install') {
@@ -33,12 +43,6 @@ chrome.runtime.onInstalled.addListener((details) => {
     });
     
     // Create default settings object in storage
-    const defaultSettings = {
-      enabled: true,
-      cognitive: { simplifier: false, focusMode: false, chatbotEnabled: true },
-      visual: { contrast: 100, motionBlocker: false, altTextGenerator: false, readAloud: false },
-      motor: { largerTargets: false, voiceCommands: false, gestureControls: false }
-    };
     chrome.storage.local.set({ extensionSettings: defaultSettings });
     chrome.storage.local.set({ onboardingComplete: false });
   }
@@ -67,7 +71,7 @@ function notifyTabsOfSettingsUpdate(settings) {
         chrome.tabs.sendMessage(tab.id, { 
           action: 'settingsUpdated', 
           settings: settings 
-        }).catch(err => console.log(`Could not send to tab ${tab.id}: ${err.message}`));
+        }).catch(err => console.log(`AccessAI: Could not send to tab ${tab.id}: ${err.message}`));
       }
     });
   });
@@ -79,7 +83,7 @@ async function updateSettings(newSettings) {
     chrome.storage.local.set({ extensionSettings: newSettings }, () => {
       notifyTabsOfSettingsUpdate(newSettings);
       // Also notify the popup/chatbot UI
-      chrome.runtime.sendMessage({ action: 'settingsUpdated', settings: newSettings }).catch(err => console.log(err.message));
+      chrome.runtime.sendMessage({ action: 'settingsUpdated', settings: newSettings }).catch(err => console.log(`AccessAI: ${err.message}`));
       resolve();
     });
   });
@@ -91,7 +95,7 @@ async function handleAIChat(prompt) {
   
   // Get current settings
   const result = await chrome.storage.local.get(['extensionSettings']);
-  let settings = result.extensionSettings || {};
+  let settings = result.extensionSettings || defaultSettings;
 
   // "Tool Calling" - Check if the prompt is a command
   let commandResponse = null;
@@ -111,6 +115,20 @@ async function handleAIChat(prompt) {
     settings.motor = { ...settings.motor, largerTargets: enable };
     await updateSettings(settings);
     commandResponse = enable ? "Larger click targets are on." : "Larger click targets are off.";
+  
+  // --- NEW COMMANDS FOR NEW FEATURES ---
+  } else if (lowerPrompt.includes('button targeting') || lowerPrompt.includes('cursor guide')) {
+    const enable = !lowerPrompt.includes('disable') && !lowerPrompt.includes('turn off');
+    settings.motor = { ...settings.motor, buttonTargeting: enable };
+    await updateSettings(settings);
+    commandResponse = enable ? "Button Targeting is now on." : "Button Targeting is now off.";
+  } else if (lowerPrompt.includes('voice command')) {
+    const enable = !lowerPrompt.includes('disable') && !lowerPrompt.includes('turn off');
+    settings.motor = { ...settings.motor, voiceCommands: enable };
+    await updateSettings(settings);
+    commandResponse = enable ? "Voice Commands are now enabled. Try saying 'Scroll down'!" : "Voice Commands are now disabled.";
+  // --- END NEW COMMANDS ---
+
   } else if (lowerPrompt.includes('extension') && (lowerPrompt.includes('disable') || lowerPrompt.includes('turn off'))) {
     settings.enabled = false;
     await updateSettings(settings);
@@ -178,7 +196,7 @@ async function handleTextSimplification(text, tabId) {
       chrome.tabs.sendMessage(tabId, { 
         action: 'simplifiedTextResponse', 
         text: simplifiedText 
-      }).catch(err => console.log(`Could not send to tab ${tabId}: ${err.message}`));
+      }).catch(err => console.log(`AccessAI: Could not send to tab ${tabId}: ${err.message}`));
     }
 
   } catch (error) {
@@ -188,7 +206,7 @@ async function handleTextSimplification(text, tabId) {
       chrome.tabs.sendMessage(tabId, {
         action: 'simplifiedTextResponse',
         text: `Error simplifying text: ${error.message}`
-      }).catch(err => console.log(`Could not send to tab ${tabId}: ${err.message}`));
+      }).catch(err => console.log(`AccessAI: Could not send to tab ${tabId}: ${err.message}`));
     }
   }
 }
