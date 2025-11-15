@@ -24,6 +24,8 @@ interface Settings {
   };
   motor: {
     largerTargets: boolean;
+    // --- NEW: Add buttonTargeting ---
+    buttonTargeting: boolean;
     voiceCommands: boolean;
     gestureControls: boolean;
   };
@@ -44,6 +46,8 @@ const defaultSettings: Settings = {
   },
   motor: {
     largerTargets: false,
+    // --- NEW: Add buttonTargeting ---
+    buttonTargeting: false, 
     voiceCommands: false,
     gestureControls: false,
   },
@@ -56,9 +60,17 @@ const Settings = () => {
 
   // 1. Load settings from chrome.storage
   useEffect(() => {
-    chrome.storage.local.get("extensionSettings", (result) => {
-      if (result.extensionSettings) {
-        setSettings(result.extensionSettings);
+    chrome.runtime.sendMessage({ action: 'getSettings' }, (result) => {
+      // Merge with defaults to ensure all keys exist
+      const loadedSettings = {
+        ...defaultSettings,
+        ...result,
+        cognitive: { ...defaultSettings.cognitive, ...result?.cognitive },
+        visual: { ...defaultSettings.visual, ...result?.visual },
+        motor: { ...defaultSettings.motor, ...result?.motor },
+      };
+      if (result) {
+        setSettings(loadedSettings);
       }
     });
 
@@ -100,12 +112,13 @@ const Settings = () => {
 
   const handleReset = () => {
     // This logic is from your Onboarding.tsx, to reset preferences
-    localStorage.setItem("onboardingComplete", "false"); 
-    toast({
-      title: "Onboarding Reset",
-      description: "You will be asked to set your needs again.",
+    chrome.storage.local.set({ onboardingComplete: false }, () => {
+      toast({
+        title: "Onboarding Reset",
+        description: "You will be asked to set your needs again.",
+      });
+      navigate("/onboarding");
     });
-    navigate("/onboarding");
   };
 
   return (
@@ -158,7 +171,10 @@ const Settings = () => {
           </div>
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <p className="font-medium text-foreground">AI Chatbot</p>
+               <div>
+                <p className="font-medium text-foreground">AI Chatbot</p>
+                 <p className="text-sm text-muted-foreground">Get help with accessibility features</p>
+               </div>
               <Switch
                 checked={settings.cognitive.chatbotEnabled}
                 onCheckedChange={(checked) =>
@@ -168,7 +184,10 @@ const Settings = () => {
             </div>
             <Separator />
             <div className="flex items-center justify-between">
-              <p className="font-medium text-foreground">Text Simplifier</p>
+              <div>
+                <p className="font-medium text-foreground">Text Simplifier</p>
+                <p className="text-sm text-muted-foreground">Rewrite complex text into simpler sentences</p>
+              </div>
               <Switch
                 checked={settings.cognitive.simplifier}
                 onCheckedChange={(checked) =>
@@ -178,7 +197,10 @@ const Settings = () => {
             </div>
             <Separator />
             <div className="flex items-center justify-between">
-              <p className="font-medium text-foreground">Focus Mode</p>
+              <div>
+                <p className="font-medium text-foreground">Focus Mode</p>
+                <p className="text-sm text-muted-foreground">Hide ads and distracting visual elements</p>
+              </div>
               <Switch
                 checked={settings.cognitive.focusMode}
                 onCheckedChange={(checked) =>
@@ -215,7 +237,10 @@ const Settings = () => {
             </div>
             <Separator />
             <div className="flex items-center justify-between">
-              <p className="font-medium text-foreground">Motion Blocker</p>
+              <div>
+                <p className="font-medium text-foreground">Motion Blocker</p>
+                <p className="text-sm text-muted-foreground">Pause or slow down animations and GIFs</p>
+              </div>
               <Switch
                 checked={settings.visual.motionBlocker}
                 onCheckedChange={(checked) =>
@@ -224,6 +249,34 @@ const Settings = () => {
               />
             </div>
             {/* ... Other visual settings ... */}
+             <Separator />
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-medium text-foreground">AI Alt Text</p>
+                <p className="text-sm text-muted-foreground">Generate descriptions for images (Coming Soon)</p>
+              </div>
+              <Switch
+                checked={settings.visual.altTextGenerator}
+                onCheckedChange={(checked) =>
+                  handleSettingChange('visual', 'altTextGenerator', checked)
+                }
+                disabled
+              />
+            </div>
+            <Separator />
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-medium text-foreground">Spatial Read-Aloud</p>
+                <p className="text-sm text-muted-foreground">Word-by-word reading with highlighting (Coming Soon)</p>
+              </div>
+              <Switch
+                checked={settings.visual.readAloud}
+                onCheckedChange={(checked) =>
+                  handleSettingChange('visual', 'readAloud', checked)
+                }
+                disabled
+              />
+            </div>
           </div>
         </Card>
         
@@ -237,7 +290,10 @@ const Settings = () => {
           </div>
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <p className="font-medium text-foreground">Larger Click Targets</p>
+              <div>
+                <p className="font-medium text-foreground">Larger Click Targets</p>
+                <p className="text-sm text-muted-foreground">Make buttons and links easier to click</p>
+              </div>
               <Switch
                 checked={settings.motor.largerTargets}
                 onCheckedChange={(checked) =>
@@ -245,7 +301,50 @@ const Settings = () => {
                 }
               />
             </div>
-            {/* ... Other motor settings ... */}
+            
+            {/* --- NEW: Button Targeting Switch --- */}
+            <Separator />
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-medium text-foreground">Button Targeting</p>
+                <p className="text-sm text-muted-foreground">Guides cursor to links and buttons</p>
+              </div>
+              <Switch
+                checked={settings.motor.buttonTargeting}
+                onCheckedChange={(checked) =>
+                  handleSettingChange('motor', 'buttonTargeting', checked)
+                }
+              />
+            </div>
+            {/* --- END NEW --- */}
+
+            <Separator />
+            <div className="flex items-center justify-between">
+               <div>
+                <p className="font-medium text-foreground">Voice Commands</p>
+                <p className="text-sm text-muted-foreground">Control navigation with voice</p>
+              </div>
+              <Switch
+                checked={settings.motor.voiceCommands}
+                onCheckedChange={(checked) =>
+                  handleSettingChange('motor', 'voiceCommands', checked)
+                }
+              />
+            </div>
+            <Separator />
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-medium text-foreground">Gesture Controls</p>
+                <p className="text-sm text-muted-foreground">Use gestures for complex actions (Coming Soon)</p>
+              </div>
+              <Switch
+                checked={settings.motor.gestureControls}
+                onCheckedChange={(checked) =>
+                  handleSettingChange('motor', 'gestureControls', checked)
+                }
+                disabled
+              />
+            </div>
           </div>
         </Card>
 
