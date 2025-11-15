@@ -1,4 +1,5 @@
 // src/pages/Popup.tsx
+
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -15,8 +16,8 @@ const Popup = () => {
     largerTargets: false,
   });
 
-  // 1. Load settings from chrome.storage
   useEffect(() => {
+    // 1. Load settings from chrome.storage
     chrome.storage.local.get("extensionSettings", (result) => {
       if (result.extensionSettings) {
         const parsed = result.extensionSettings;
@@ -29,7 +30,7 @@ const Popup = () => {
       }
     });
 
-    // Listen for changes from other parts (like the chatbot)
+    // 2. Listen for changes from other parts
     const listener = (request: any) => {
       if (request.action === 'settingsUpdated') {
         const parsed = request.settings;
@@ -44,12 +45,12 @@ const Popup = () => {
     chrome.runtime.onMessage.addListener(listener);
     return () => chrome.runtime.onMessage.removeListener(listener);
   }, []);
-
-  // 2. Helper to save to chrome.storage
+  
+  // 3. Helper to save to chrome.storage
   const updateStorageSettings = (newSettings: object) => {
      chrome.runtime.sendMessage(
       { action: 'saveSettings', settings: newSettings },
-      () => {} // We don't need a toast in the quick popup
+      () => {} // No toast needed
     );
   }
 
@@ -78,9 +79,15 @@ const Popup = () => {
     });
   };
 
+  // This function opens your main dashboard (Index.tsx) in a new tab.
+  const openChatInterface = () => {
+    chrome.tabs.create({
+      url: chrome.runtime.getURL('index.html#/')
+    });
+  };
+
   return (
     <div className="w-[380px] bg-background p-4 space-y-4">
-      {/* ... JSX remains the same as your original file ... */}
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-foreground">AccessAI</h1>
         <Button
@@ -110,7 +117,6 @@ const Popup = () => {
             <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
               Quick Controls
             </h2>
-
             <Card className="p-4">
               <div className="flex items-center justify-between">
                 <div>
@@ -123,7 +129,6 @@ const Popup = () => {
                 />
               </div>
             </Card>
-
             <Card className="p-4">
               <div className="flex items-center justify-between">
                 <div>
@@ -136,7 +141,6 @@ const Popup = () => {
                 />
               </div>
             </Card>
-
             <Card className="p-4">
               <div className="flex items-center justify-between">
                 <div>
@@ -151,7 +155,11 @@ const Popup = () => {
             </Card>
           </div>
 
-          <Button className="w-full" variant="outline" disabled>
+          <Button 
+            className="w-full" 
+            variant="outline" 
+            onClick={openChatInterface}
+          >
             <MessageSquare className="w-4 h-4 mr-2" />
             Open AI Assistant
           </Button>
