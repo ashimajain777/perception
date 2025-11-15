@@ -8,7 +8,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     });
     return true; // Keep channel open for async response
   }
-
+  
   if (request.action === 'saveSettings') {
     chrome.storage.local.set({ extensionSettings: request.settings }, () => {
       sendResponse({ success: true });
@@ -17,32 +17,49 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     });
     return true;
   }
-
+  
   if (request.action === 'askAI') {
     handleAIChat(request.prompt).then(sendResponse);
     return true; // Keep channel open for async response
   }
 });
 
-// 2. Open onboarding page on first install
+// 2. Open onboarding, set defaults, and create context menu on install
 chrome.runtime.onInstalled.addListener((details) => {
   if (details.reason === 'install') {
+    // Open onboarding page
     chrome.tabs.create({
       url: chrome.runtime.getURL('index.html#/onboarding')
     });
-    // Set default settings on install
-    chrome.storage.local.set({ 
-      extensionSettings: {
-        enabled: true,
-        cognitive: { simplifier: false, focusMode: false, chatbotEnabled: true },
-        visual: { contrast: 100, motionBlocker: false, altTextGenerator: false, readAloud: false },
-        motor: { largerTargets: false, voiceCommands: false, gestureControls: false }
-      }
-    });
+    
+    // Create default settings object in storage
+    const defaultSettings = {
+      enabled: true,
+      cognitive: { simplifier: false, focusMode: false, chatbotEnabled: true },
+      visual: { contrast: 100, motionBlocker: false, altTextGenerator: false, readAloud: false },
+      motor: { largerTargets: false, voiceCommands: false, gestureControls: false }
+    };
+    chrome.storage.local.set({ extensionSettings: defaultSettings });
+    chrome.storage.local.set({ onboardingComplete: false });
+  }
+
+  // Create the right-click menu item
+  chrome.contextMenus.create({
+    id: "simplify-text",
+    title: "Simplify Text with AccessAI",
+    contexts: ["selection"] // Only show when text is selected
+  });
+});
+
+// 3. Handle the right-click menu click
+chrome.contextMenus.onClicked.addListener((info, tab) => {
+  if (info.menuItemId === "simplify-text" && info.selectionText) {
+    // Send the selected text to the AI for simplification
+    handleTextSimplification(info.selectionText, tab.id);
   }
 });
 
-// 3. Helper to notify content scripts when settings change
+// 4. Helper to notify content scripts when settings change
 function notifyTabsOfSettingsUpdate(settings) {
   chrome.tabs.query({}, (tabs) => {
     tabs.forEach(tab => {
@@ -56,7 +73,7 @@ function notifyTabsOfSettingsUpdate(settings) {
   });
 }
 
-// 4. Helper to update settings (called by AI)
+// 5. Helper to update settings (called by AI)
 async function updateSettings(newSettings) {
   return new Promise((resolve) => {
     chrome.storage.local.set({ extensionSettings: newSettings }, () => {
@@ -68,10 +85,10 @@ async function updateSettings(newSettings) {
   });
 }
 
-// 5. AI CHATBOT "BACKEND" LOGIC
+// 6. AI CHATBOT "BACKEND" LOGIC
 async function handleAIChat(prompt) {
   const lowerPrompt = prompt.toLowerCase();
-
+  
   // Get current settings
   const result = await chrome.storage.local.get(['extensionSettings']);
   let settings = result.extensionSettings || {};
@@ -125,8 +142,7 @@ async function handleAIChat(prompt) {
     }
 
     const data = await response.json();
-
-    // This 'data.text' must match what your server sends back
+    
     return { response: data.text, settings: settings };
 
   } catch (error) {
@@ -135,5 +151,44 @@ async function handleAIChat(prompt) {
       return { response: "Sorry, I can't connect to the AI. Is the local proxy server running?", settings: settings };
     }
     return { response: "Sorry, I'm having trouble connecting to the AI. Please try again later.", settings: settings };
+  }
+}
+
+// 7. Handle Text Simplification
+async function handleTextSimplification(text, tabId) {
+  try {
+    const response = await fetch("http://localhost:3001/api/chat", {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        // Use the same chat endpoint, but with a specific prompt
+        prompt: `Please simplify the following text:\n\n"${text}"`
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`Proxy server error: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    const simplifiedText = data.text;
+
+    // Send the simplified text back to the content script
+    if (tabId) {
+      chrome.tabs.sendMessage(tabId, { 
+        action: 'simplifiedTextResponse', 
+        text: simplifiedText 
+      }).catch(err => console.log(`Could not send to tab ${tabId}: ${err.message}`));
+    }
+
+  } catch (error) {
+    console.error("Simplification Error:", error.message);
+    // Send an error message back
+    if (tabId) {
+      chrome.tabs.sendMessage(tabId, {
+        action: 'simplifiedTextResponse',
+        text: `Error simplifying text: ${error.message}`
+      }).catch(err => console.log(`Could not send to tab ${tabId}: ${err.message}`));
+    }
   }
 }
