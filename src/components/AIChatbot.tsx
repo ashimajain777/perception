@@ -1,4 +1,5 @@
-import { useState } from "react";
+// src/components/AIChatbot.tsx
+import { useState, useEffect, useRef } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,6 +15,7 @@ interface Message {
 
 export const AIChatbot = () => {
   const [isOpen, setIsOpen] = useState(false);
+  const [isAiTyping, setIsAiTyping] = useState(false);
   const [messages, setMessages] = useState<Message[]>([
     {
       id: "1",
@@ -23,9 +25,34 @@ export const AIChatbot = () => {
     },
   ]);
   const [input, setInput] = useState("");
+  const scrollAreaRef = useRef<HTMLDivElement>(null);
+
+  // Scroll to bottom when messages change
+  useEffect(() => {
+    if (scrollAreaRef.current) {
+      scrollAreaRef.current.scrollTo({ top: scrollAreaRef.current.scrollHeight, behavior: 'smooth' });
+    }
+  }, [messages]);
+
+  // Listen for settings changes pushed from the background script
+  useEffect(() => {
+    const listener = (request: any) => {
+      if (request.action === 'settingsUpdated') {
+        // Optional: Notify user that AI changed a setting
+        // setMessages(prev => [...prev, {
+        //   id: Date.now().toString(),
+        //   role: 'assistant',
+        //   content: "[Settings have been updated]",
+        //   timestamp: new Date()
+        // }]);
+      }
+    };
+    chrome.runtime.onMessage.addListener(listener);
+    return () => chrome.runtime.onMessage.removeListener(listener);
+  }, []);
 
   const handleSend = () => {
-    if (!input.trim()) return;
+    if (!input.trim() || isAiTyping) return;
 
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -36,40 +63,32 @@ export const AIChatbot = () => {
 
     setMessages((prev) => [...prev, userMessage]);
     setInput("");
+    setIsAiTyping(true);
 
-    // Simulate AI response (placeholder for actual AI integration)
-    setTimeout(() => {
-      const aiResponse: Message = {
-        id: (Date.now() + 1).toString(),
-        role: "assistant",
-        content: getAIResponse(input),
-        timestamp: new Date(),
-      };
-      setMessages((prev) => [...prev, aiResponse]);
-    }, 1000);
-  };
-
-  // Placeholder response logic (will be replaced with actual AI)
-  const getAIResponse = (userInput: string): string => {
-    const lower = userInput.toLowerCase();
-
-    if (lower.includes("small text") || lower.includes("can't read")) {
-      return "I understand you're having trouble with text size. Try enabling 'High Contrast Mode' in Visual Adaptation settings, or use your browser's zoom feature (Ctrl/Cmd + '+' to zoom in).";
-    }
-
-    if (lower.includes("distract") || lower.includes("focus")) {
-      return "It sounds like you need Focus Mode! This feature fades out ads and sidebars. You can enable it in Settings > Cognitive Adaptation > Focus Mode. It's perfect for ADHD support!";
-    }
-
-    if (lower.includes("motion") || lower.includes("animation")) {
-      return "Motion sensitivity can be challenging. Try the Motion Blocker feature in Visual Adaptation settings. It will pause or slow down GIFs, videos, and animations.";
-    }
-
-    if (lower.includes("click") || lower.includes("button")) {
-      return "For easier clicking, enable 'Larger Click Targets' in Motor Adaptation settings. This makes all buttons and links bigger and easier to interact with.";
-    }
-
-    return "I'm here to help! You can ask me about:\n\n• Focus Mode for reducing distractions\n• Motion Blocker for photosensitivity\n• Text Simplifier for easier reading\n• Larger Click Targets for motor assistance\n\nWhat would you like to know more about?";
+    // Send prompt to the "backend" (background.js)
+    chrome.runtime.sendMessage(
+      { action: "askAI", prompt: input },
+      (response) => {
+        setIsAiTyping(false);
+        if (response && response.response) {
+          const aiResponse: Message = {
+            id: (Date.now() + 1).toString(),
+            role: "assistant",
+            content: response.response,
+            timestamp: new Date(),
+          };
+          setMessages((prev) => [...prev, aiResponse]);
+        } else {
+          const errorResponse: Message = {
+            id: (Date.now() + 1).toString(),
+            role: "assistant",
+            content: "Sorry, I encountered an error. Please try again.",
+            timestamp: new Date(),
+          };
+          setMessages((prev) => [...prev, errorResponse]);
+        }
+      }
+    );
   };
 
   if (!isOpen) {
@@ -101,7 +120,7 @@ export const AIChatbot = () => {
         </Button>
       </div>
 
-      <ScrollArea className="flex-1 p-4">
+      <ScrollArea className="flex-1 p-4" ref={scrollAreaRef}>
         <div className="space-y-4">
           {messages.map((message) => (
             <div
@@ -127,6 +146,13 @@ export const AIChatbot = () => {
               </div>
             </div>
           ))}
+          {isAiTyping && (
+             <div className="flex justify-start">
+               <div className="max-w-[80%] rounded-lg p-3 bg-muted text-foreground">
+                 <p className="text-sm">Typing...</p>
+               </div>
+             </div>
+          )}
         </div>
       </ScrollArea>
 
@@ -136,16 +162,14 @@ export const AIChatbot = () => {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyPress={(e) => e.key === "Enter" && handleSend()}
-            placeholder="Ask about accessibility features..."
+            placeholder="Ask me to turn on focus mode..."
             className="flex-1"
+            disabled={isAiTyping}
           />
-          <Button onClick={handleSend} size="icon">
+          <Button onClick={handleSend} size="icon" disabled={isAiTyping}>
             <Send className="w-4 h-4" />
           </Button>
         </div>
-        <p className="text-xs text-muted-foreground mt-2">
-          AI integration coming soon. Currently using pattern matching.
-        </p>
       </div>
     </Card>
   );
