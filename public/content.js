@@ -1,29 +1,46 @@
-// Content script for AccessAI extension
-// This runs on web pages to apply accessibility modifications
-
+// public/content.js
 (function() {
   'use strict';
 
   let settings = {};
+  let styleElements = {}; // Keep track of our injected style tags
 
-  // Load settings from storage
+  // 1. Load settings from storage
   function loadSettings() {
     chrome.runtime.sendMessage({ action: 'getSettings' }, (response) => {
       settings = response || {};
-      if (settings.enabled) {
-        applySettings();
-      }
+      applySettings();
     });
   }
 
-  // Apply accessibility modifications based on settings
+  // 2. Remove all injected styles
+  function clearAllStyles() {
+    for (const key in styleElements) {
+      if (styleElements[key]) {
+        styleElements[key].remove();
+        styleElements[key] = null;
+      }
+    }
+    // Also remove any global filters
+    document.documentElement.style.filter = '';
+  }
+
+  // 3. Apply accessibility modifications based on settings
   function applySettings() {
-    // Focus Mode: Hide distracting elements
+    // First, clear all existing modifications
+    clearAllStyles();
+    
+    // If extension is disabled, stop here
+    if (!settings.enabled) {
+      return;
+    }
+
+    // Focus Mode
     if (settings.cognitive?.focusMode) {
       applyFocusMode();
     }
 
-    // Motion Blocker: Reduce animations
+    // Motion Blocker
     if (settings.visual?.motionBlocker) {
       blockMotion();
     }
@@ -39,84 +56,86 @@
     }
   }
 
+  function injectStyle(id, css) {
+    // Remove old style if it exists
+    if (styleElements[id]) {
+      styleElements[id].remove();
+    }
+    const style = document.createElement('style');
+    style.id = id;
+    style.textContent = css;
+    document.head.appendChild(style);
+    styleElements[id] = style;
+  }
+
   // Focus Mode Implementation
   function applyFocusMode() {
-    const style = document.createElement('style');
-    style.id = 'accessai-focus-mode';
-    style.textContent = `
-      /* Hide common distraction elements */
-      [class*="ad-"], [class*="advertisement"],
-      [id*="ad-"], [id*="advertisement"],
+    const css = `
       aside, [role="complementary"],
-      .sidebar, #sidebar {
-        opacity: 0.3 !important;
-        filter: blur(3px) !important;
+      .sidebar, #sidebar,
+      [class*="ad-"], [class*="advertisement"],
+      [id*="ad-"], [id*="advertisement"] {
+        opacity: 0.15 !important;
+        filter: blur(2px) !important;
         pointer-events: none !important;
+        transition: opacity 0.3s, filter 0.3s;
+      }
+      
+      aside:hover, [role="complementary"]:hover,
+      .sidebar:hover, #sidebar:hover,
+      [class*="ad-"]:hover, [class*="advertisement"]:hover,
+      [id*="ad-"]:hover, [id*="advertisement"]:hover {
+        opacity: 1 !important;
+        filter: none !important;
       }
     `;
-    document.head.appendChild(style);
+    injectStyle('accessai-focus-mode', css);
   }
 
   // Motion Blocker Implementation
   function blockMotion() {
-    const style = document.createElement('style');
-    style.id = 'accessai-motion-blocker';
-    style.textContent = `
+    const css = `
       * {
         animation-duration: 0.001ms !important;
         animation-iteration-count: 1 !important;
         transition-duration: 0.001ms !important;
-      }
-      img, video {
-        animation: none !important;
+        scroll-behavior: auto !important;
       }
     `;
-    document.head.appendChild(style);
-
-    // Pause all videos and GIFs
-    document.querySelectorAll('video').forEach(video => {
-      video.pause();
-      video.style.filter = 'grayscale(50%)';
-    });
+    injectStyle('accessai-motion-blocker', css);
   }
 
   // Contrast Boost Implementation
   function applyContrastBoost(level) {
+    // Note: This is a global filter. `injectStyle` isn't needed.
     const filterValue = (level / 100).toFixed(2);
-    const style = document.createElement('style');
-    style.id = 'accessai-contrast';
-    style.textContent = `
-      html {
-        filter: contrast(${filterValue}) !important;
-      }
-    `;
-    document.head.appendChild(style);
+    document.documentElement.style.filter = `contrast(${filterValue})`;
   }
 
   // Larger Click Targets Implementation
   function enlargeClickTargets() {
-    const style = document.createElement('style');
-    style.id = 'accessai-larger-targets';
-    style.textContent = `
+    const css = `
       a, button, input, select, textarea,
       [role="button"], [role="link"],
       [onclick], [tabindex] {
         min-width: 44px !important;
         min-height: 44px !important;
-        padding: 12px !important;
-        cursor: pointer !important;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
       }
     `;
-    document.head.appendChild(style);
+    injectStyle('accessai-larger-targets', css);
   }
 
   // Initialize on load
   loadSettings();
 
-  // Listen for settings changes
+  // 4. Listen for settings changes from the background/popup
   chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === 'settingsUpdated') {
-      loadSettings();
+      settings = request.settings || {};
+      applySettings();
     }
   });
 
