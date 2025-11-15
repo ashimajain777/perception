@@ -14,6 +14,7 @@ const Popup = () => {
     focusMode: false,
     motionBlocker: false,
     largerTargets: false,
+    buttonTargeting: false, // --- NEW ---
   });
 
   useEffect(() => {
@@ -26,6 +27,7 @@ const Popup = () => {
           focusMode: parsed.cognitive?.focusMode || false,
           motionBlocker: parsed.visual?.motionBlocker || false,
           largerTargets: parsed.motor?.largerTargets || false,
+          buttonTargeting: parsed.motor?.buttonTargeting || false, // --- NEW ---
         });
       }
     });
@@ -39,6 +41,7 @@ const Popup = () => {
           focusMode: parsed.cognitive?.focusMode || false,
           motionBlocker: parsed.visual?.motionBlocker || false,
           largerTargets: parsed.motor?.largerTargets || false,
+          buttonTargeting: parsed.motor?.buttonTargeting || false, // --- NEW ---
         });
       }
     };
@@ -64,7 +67,11 @@ const Popup = () => {
           ...settings,
           cognitive: { ...settings.cognitive, focusMode: newQuickSettings.focusMode },
           visual: { ...settings.visual, motionBlocker: newQuickSettings.motionBlocker },
-          motor: { ...settings.motor, largerTargets: newQuickSettings.largerTargets },
+          motor: { 
+            ...settings.motor, 
+            largerTargets: newQuickSettings.largerTargets,
+            buttonTargeting: newQuickSettings.buttonTargeting // --- NEW ---
+          },
         };
         updateStorageSettings(updatedSettings);
     });
@@ -153,6 +160,22 @@ const Popup = () => {
                 />
               </div>
             </Card>
+            
+            {/* --- NEW: Button Targeting Quick Toggle --- */}
+            <Card className="p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-medium text-foreground">Button Targeting</p>
+                  <p className="text-xs text-muted-foreground">Guide cursor</p>
+                </div>
+                <Switch
+                  checked={quickSettings.buttonTargeting}
+                  onCheckedChange={() => handleToggle("buttonTargeting")}
+                />
+              </div>
+            </Card>
+            {/* --- END NEW --- */}
+
           </div>
 
           <Button 
