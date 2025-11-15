@@ -9,7 +9,8 @@
     "scripting"
   ],
   "host_permissions": [
-    "<all_urls>"
+    "<all_urls>",
+    "http://localhost:3001/*"
   ],
   "action": {
     "default_popup": "index.html#/popup",
