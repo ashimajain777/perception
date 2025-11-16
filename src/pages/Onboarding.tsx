@@ -103,7 +103,7 @@ const Onboarding = () => {
 
     // 1. Get the default settings
     chrome.runtime.sendMessage({ action: 'getSettings' }, (settings) => {
-      if (!settings) {
+      if (chrome.runtime.lastError || !settings) {
          toast({ title: "Error", description: "Could not load default settings. Please reload.", variant: "destructive" });
          return;
       }
@@ -124,15 +124,21 @@ const Onboarding = () => {
 
       // 3. Save the *full settings object* to chrome.storage
       chrome.runtime.sendMessage({ action: 'saveSettings', settings: settings }, (response) => {
-         if (response.success) {
+         if (response && response.success) {
             // 4. Save onboarding status to chrome.storage
             chrome.storage.local.set({ onboardingComplete: true }, () => {
+              if (chrome.runtime.lastError) {
+                toast({ title: "Error", description: "Could not save onboarding status.", variant: "destructive" });
+                return;
+              }
               toast({
                 title: "Preferences saved!",
                 description: "Your accessibility settings have been configured",
               });
               navigate("/");
             });
+         } else {
+           toast({ title: "Error", description: "Could not save settings.", variant: "destructive" });
          }
       });
     });
