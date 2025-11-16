@@ -8,13 +8,15 @@
     'accessai-focus-mode', 
     'accessai-motion-blocker', 
     'accessai-larger-targets'
-    // Note: We manage button-targeting styles directly in JS
   ];
 
   // --- NEW: Feature-specific state ---
   let cursorGuideEl = null;
   let currentTargetEl = null;
   let recognition = null;
+  let isReadAloudActive = false;
+  let currentUtterance = null;
+  let currentHighlightDiv = null;
   // ---
 
   // 1. Load settings from storage
@@ -67,6 +69,7 @@
       // Turn off running features
       toggleButtonTargeting(false);
       toggleVoiceCommands(false);
+      toggleReadAloud(false); // --- NEW ---
       return;
     }
 
@@ -87,8 +90,15 @@
     if (settings.visual?.contrast && settings.visual.contrast > 100) {
       applyContrastBoost(settings.visual.contrast);
     } else {
+      // Only reset contrast if it's 100 or less
       document.documentElement.style.filter = '';
     }
+
+    // --- NEW: Toggle Spatial Read-Aloud ---
+    toggleReadAloud(settings.visual?.readAloud);
+    
+    // --- NEW: Toggle Alt Text Generator (just logs, feature is context-menu based) ---
+    toggleAltTextGenerator(settings.visual?.altTextGenerator);
 
     // Motor Features
     if (settings.motor?.largerTargets) {
@@ -97,10 +107,8 @@
       removeStyle('accessai-larger-targets');
     }
 
-    // --- NEW: Apply new motor features ---
     toggleButtonTargeting(settings.motor?.buttonTargeting);
     toggleVoiceCommands(settings.motor?.voiceCommands);
-    // ---
   }
   
   // --- Feature Implementations (CSS definitions) ---
@@ -162,7 +170,7 @@
     injectStyle('accessai-larger-targets', css);
   }
 
-  // --- NEW: Feature 1: Button Targeting ---
+  // --- Feature 1: Button Targeting ---
   
   function getClickableElements(from) {
     return Array.from(
@@ -222,11 +230,6 @@
         currentTargetEl.classList.remove('accessai-targeted-element');
         currentTargetEl = null;
       }
-      // Optional: make guide follow cursor
-      // cursorGuideEl.style.left = `${e.clientX}px`;
-      // cursorGuideEl.style.top = `${e.clientY}px`;
-      // cursorGuideEl.style.width = `40px`;
-      // cursorGuideEl.style.height = `40px`;
     }
   }
 
@@ -252,7 +255,7 @@
     }
   }
 
-  // --- NEW: Feature 2: Voice Commands ---
+  // --- Feature 2: Voice Commands ---
   
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 
@@ -274,9 +277,8 @@
 
         recognition.onerror = (event) => {
           console.error('AccessAI Voice Error:', event.error);
-          // Restart if it's a common error like 'no-speech'
-          if (event.error === 'no-speech' || event.error === 'network') {
-            restartRecognition();
+          if (event.error === 'no-speech' || event.error === 'network' || event.error === 'audio-capture') {
+             setTimeout(restartRecognition, 500);
           }
         };
         
@@ -291,11 +293,14 @@
 
       } catch (err) {
         console.error("AccessAI: Speech recognition failed to start.", err);
-        alert("AccessAI: Could not start voice recognition. Please ensure microphone permissions are granted.");
+        if (err.name === 'NotAllowedError') {
+           console.log("AccessAI: Microphone permission denied.");
+        }
       }
       
     } else {
       if (recognition) {
+        recognition.onend = null; // Don't restart
         recognition.stop();
         recognition = null;
       }
@@ -303,7 +308,8 @@
   }
 
   function restartRecognition() {
-    if (recognition) {
+     // Only restart if the setting is still enabled
+    if (recognition && settings.enabled && settings.motor?.voiceCommands) {
       try {
         recognition.start();
       } catch(e) {
@@ -327,7 +333,6 @@
         history.forward();
         break;
       case 'go next':
-        // This is a heuristic, it might not always work
         const nextLink = [...document.querySelectorAll('a, button')]
           .find(el => 
             el.textContent.toLowerCase().includes('next') || 
@@ -340,11 +345,165 @@
         }
         break;
       case 'click':
-        // Clicks the currently targeted element (if one is targeted)
         if (currentTargetEl) {
           currentTargetEl.click();
         }
         break;
+    }
+  }
+
+  // --- NEW: Feature 3: Visual Element Explainer (Alt Text) ---
+  
+  function toggleAltTextGenerator(enable) {
+    // This feature is enabled via context menu, so we just log it.
+    // The main logic is in the message listener for 'altTextResponse'.
+    if (enable) {
+      console.log('AccessAI: Alt Text Generator enabled. Right-click images to use.');
+    }
+  }
+
+  function displayAltText(text, srcUrl) {
+    // Remove any existing alt text popups
+    const oldPopup = document.querySelector('.accessai-alt-text-wrapper');
+    if (oldPopup) {
+       try {
+         // Try to unwrap the image
+         const oldImg = oldPopup.querySelector('img');
+         if (oldImg) oldPopup.parentNode.insertBefore(oldImg, oldPopup);
+         oldPopup.remove();
+       } catch (e) {}
+    }
+
+    const targetImage = Array.from(document.querySelectorAll('img')).find(
+      img => img.src === srcUrl
+    );
+    if (!targetImage || !targetImage.parentNode) {
+      console.log("AccessAI: Could not find image to display alt text for.");
+      return;
+    }
+
+    // Create a wrapper
+    const wrapper = document.createElement('div');
+    wrapper.className = 'accessai-alt-text-wrapper';
+    wrapper.style.position = 'relative';
+    wrapper.style.display = 'inline-block'; // Don't break layout
+    
+    // Wrap the image
+    targetImage.parentNode.insertBefore(wrapper, targetImage);
+    wrapper.appendChild(targetImage);
+
+    // Create the alt text overlay
+    const overlay = document.createElement('div');
+    overlay.className = 'accessai-alt-text'; // Use existing style from content.css
+    overlay.textContent = text;
+    
+    wrapper.appendChild(overlay);
+
+    // Remove after 10 seconds or on click
+    const removeOverlay = () => {
+      try {
+        // Unwrap the image
+        if (wrapper.parentNode) {
+          wrapper.parentNode.insertBefore(targetImage, wrapper);
+        }
+        wrapper.remove();
+      } catch(e) {
+         console.log("AccessAI: Error removing alt text wrapper", e);
+      }
+    };
+    const timeoutId = setTimeout(removeOverlay, 10000);
+    wrapper.addEventListener('click', () => {
+      clearTimeout(timeoutId);
+      removeOverlay();
+    }, { once: true });
+  }
+
+  // --- NEW: Feature 4: Spatial Read-Aloud ---
+
+  function cleanupHighlight() {
+    if (currentHighlightDiv) {
+      try {
+        currentHighlightDiv.innerHTML = currentHighlightDiv.dataset.originalText || "";
+        delete currentHighlightDiv.dataset.originalText;
+      } catch (e) {
+        console.log("AccessAI: Failed to clean up highlight");
+      }
+      currentHighlightDiv = null;
+    }
+    currentUtterance = null;
+  }
+
+  function handleReadAloudClick(e) {
+    if (!isReadAloudActive) return;
+
+    // Don't read if clicking a link or button
+    const target = e.target.closest('a, button, [role="button"], [role="link"]');
+    if (target) return;
+
+    const validTags = ['P', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'LI', 'SPAN', 'DIV'];
+    const textEl = e.target.closest(validTags.join(','));
+
+    // Only read elements with a reasonable amount of text
+    if (textEl && textEl.textContent.trim().length > 40) {
+      e.preventDefault();
+      e.stopPropagation();
+      
+      // Stop previous speech
+      speechSynthesis.cancel();
+      cleanupHighlight();
+
+      const text = textEl.textContent;
+      currentHighlightDiv = textEl;
+      currentHighlightDiv.dataset.originalText = textEl.innerHTML; // Store original HTML
+
+      currentUtterance = new SpeechSynthesisUtterance(text);
+      
+      const words = text.split(/(\s+)/); // Split by whitespace, keeping it
+      
+      currentUtterance.onboundary = (event) => {
+        if (event.name === 'word') {
+          try {
+            let charStart = event.charIndex;
+            let charEnd = charStart + event.charLength;
+            
+            // Reconstruct HTML with highlight
+            let html = "";
+            let charCount = 0;
+            words.forEach(word => {
+              const wordEnd = charCount + word.length;
+              if (charCount >= charStart && wordEnd <= charEnd) {
+                html += `<span class="accessai-highlight">${word}</span>`;
+              } else {
+                html += word;
+              }
+              charCount = wordEnd;
+            });
+            textEl.innerHTML = html;
+          } catch (e) {
+             console.log("AccessAI: Error highlighting word", e);
+          }
+        }
+      };
+      
+      currentUtterance.onend = () => {
+        cleanupHighlight();
+      };
+
+      speechSynthesis.speak(currentUtterance);
+    }
+  }
+
+  function toggleReadAloud(enable) {
+    if (enable) {
+      if (isReadAloudActive) return;
+      document.addEventListener('click', handleReadAloudClick, { capture: true });
+      isReadAloudActive = true;
+    } else {
+      if (!isReadAloudActive) return;
+      document.removeEventListener('click', handleReadAloudClick, { capture: true });
+      isReadAloudActive = false;
+      speechSynthesis.cancel();
+      cleanupHighlight();
     }
   }
 
@@ -365,10 +524,16 @@
       sendResponse({status: "success"});
     }
     
+    // --- NEW: Listen for Alt Text Response ---
+    if (request.action === 'altTextResponse') {
+      displayAltText(request.text, request.srcUrl);
+      sendResponse({status: "success"});
+    }
+    
     return true; // Keep channel open
   });
 
-  // 7. Function to Display the Popup
+  // 7. Function to Display the Simplification Popup
   function displaySimplifiedText(text) {
     const oldPopup = document.getElementById('accessai-simplify-popup');
     if (oldPopup) {
@@ -412,5 +577,5 @@
     document.body.appendChild(popup);
   }
 
-  console.log('AccessAI content script (v4 with Targeting and Voice) loaded');
+  console.log('AccessAI content script (v5 - Full Features) loaded');
 })();
