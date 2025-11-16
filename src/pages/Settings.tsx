@@ -24,7 +24,6 @@ interface Settings {
   };
   motor: {
     largerTargets: boolean;
-    // --- NEW: Add buttonTargeting ---
     buttonTargeting: boolean;
     voiceCommands: boolean;
     gestureControls: boolean;
@@ -46,7 +45,6 @@ const defaultSettings: Settings = {
   },
   motor: {
     largerTargets: false,
-    // --- NEW: Add buttonTargeting ---
     buttonTargeting: false, 
     voiceCommands: false,
     gestureControls: false,
@@ -111,7 +109,7 @@ const Settings = () => {
   };
 
   const handleReset = () => {
-    // This logic is from your Onboarding.tsx, to reset preferences
+    // Reset onboarding status in Chrome storage
     chrome.storage.local.set({ onboardingComplete: false }, () => {
       toast({
         title: "Onboarding Reset",
@@ -186,7 +184,7 @@ const Settings = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="font-medium text-foreground">Text Simplifier</p>
-                <p className="text-sm text-muted-foreground">Rewrite complex text into simpler sentences</p>
+                <p className="text-sm text-muted-foreground">Rewrite complex text (Right-click text)</p>
               </div>
               <Switch
                 checked={settings.cognitive.simplifier}
@@ -248,33 +246,34 @@ const Settings = () => {
                 }
               />
             </div>
-            {/* ... Other visual settings ... */}
-             <Separator />
+             
+            {/* --- NEW: Enabled AI Alt Text --- */}
+            <Separator />
             <div className="flex items-center justify-between">
               <div>
-                <p className="font-medium text-foreground">AI Alt Text</p>
-                <p className="text-sm text-muted-foreground">Generate descriptions for images (Coming Soon)</p>
+                <p className="font-medium text-foreground">AI Alt Text Generator</p>
+                <p className="text-sm text-muted-foreground">Generate image descriptions (Right-click an image)</p>
               </div>
               <Switch
                 checked={settings.visual.altTextGenerator}
                 onCheckedChange={(checked) =>
                   handleSettingChange('visual', 'altTextGenerator', checked)
                 }
-                disabled
               />
             </div>
+            
+            {/* --- NEW: Enabled Spatial Read-Aloud --- */}
             <Separator />
             <div className="flex items-center justify-between">
               <div>
                 <p className="font-medium text-foreground">Spatial Read-Aloud</p>
-                <p className="text-sm text-muted-foreground">Word-by-word reading with highlighting (Coming Soon)</p>
+                <p className="text-sm text-muted-foreground">Click on text to read it aloud with highlighting</p>
               </div>
               <Switch
                 checked={settings.visual.readAloud}
                 onCheckedChange={(checked) =>
                   handleSettingChange('visual', 'readAloud', checked)
                 }
-                disabled
               />
             </div>
           </div>
@@ -302,7 +301,6 @@ const Settings = () => {
               />
             </div>
             
-            {/* --- NEW: Button Targeting Switch --- */}
             <Separator />
             <div className="flex items-center justify-between">
               <div>
@@ -316,13 +314,12 @@ const Settings = () => {
                 }
               />
             </div>
-            {/* --- END NEW --- */}
 
             <Separator />
             <div className="flex items-center justify-between">
                <div>
                 <p className="font-medium text-foreground">Voice Commands</p>
-                <p className="text-sm text-muted-foreground">Control navigation with voice</p>
+                <p className="text-sm text-muted-foreground">Control navigation with voice (e.g., "scroll down")</p>
               </div>
               <Switch
                 checked={settings.motor.voiceCommands}
