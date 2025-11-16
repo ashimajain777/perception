@@ -29,7 +29,7 @@ const App = () => {
     } else {
       // Fallback for when not in extension (e.g., local dev)
       // This will default to showing the onboarding page.
-      console.warn("chrome.storage.local not available.");
+      console.warn("chrome.storage.local not available. Defaulting to onboarding.");
       setOnboardingComplete(false);
     }
   }, []);
