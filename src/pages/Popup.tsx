@@ -4,19 +4,23 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
+import { Slider } from "@/components/ui/slider"; // <-- NEW
 import { Settings as SettingsIcon, MessageSquare } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+
+// NEW default settings for local state
+const defaultQuickSettings = {
+  focusMode: false,
+  motionBlocker: false,
+  largerTargets: false,
+  readAloud: false,
+  fontSize: 100, // <-- NEW
+};
 
 const Popup = () => {
   const navigate = useNavigate();
   const [enabled, setEnabled] = useState(true);
-  const [quickSettings, setQuickSettings] = useState({
-    focusMode: false,
-    motionBlocker: false,
-    largerTargets: false,
-    buttonTargeting: false,
-    readAloud: false,
-  });
+  const [quickSettings, setQuickSettings] = useState(defaultQuickSettings);
 
   useEffect(() => {
     // 1. Load settings from chrome.storage
@@ -28,8 +32,8 @@ const Popup = () => {
           focusMode: parsed.cognitive?.focusMode || false,
           motionBlocker: parsed.visual?.motionBlocker || false,
           largerTargets: parsed.motor?.largerTargets || false,
-          buttonTargeting: parsed.motor?.buttonTargeting || false,
           readAloud: parsed.visual?.readAloud || false,
+          fontSize: parsed.visual?.fontSize || 100, // <-- NEW
         });
       }
     });
@@ -43,8 +47,8 @@ const Popup = () => {
           focusMode: parsed.cognitive?.focusMode || false,
           motionBlocker: parsed.visual?.motionBlocker || false,
           largerTargets: parsed.motor?.largerTargets || false,
-          buttonTargeting: parsed.motor?.buttonTargeting || false,
           readAloud: parsed.visual?.readAloud || false,
+          fontSize: parsed.visual?.fontSize || 100, // <-- NEW
         });
       }
     };
@@ -60,8 +64,9 @@ const Popup = () => {
     );
   }
 
-  const handleToggle = (key: keyof typeof quickSettings) => {
-    const newQuickSettings = { ...quickSettings, [key]: !quickSettings[key] };
+  // 4. Generic handler for ALL controls
+  const handleSettingChange = (key: keyof typeof quickSettings, value: any) => {
+    const newQuickSettings = { ...quickSettings, [key]: value };
     setQuickSettings(newQuickSettings);
 
     chrome.runtime.sendMessage({ action: 'getSettings' }, (result) => {
@@ -70,17 +75,17 @@ const Popup = () => {
           ...settings,
           cognitive: { 
             ...settings.cognitive, 
-            focusMode: newQuickSettings.focusMode // <-- Focus Mode toggle
+            focusMode: newQuickSettings.focusMode
           },
           visual: { 
             ...settings.visual, 
             motionBlocker: newQuickSettings.motionBlocker,
-            readAloud: newQuickSettings.readAloud
+            readAloud: newQuickSettings.readAloud,
+            fontSize: newQuickSettings.fontSize, // <-- NEW
           },
           motor: { 
             ...settings.motor, 
             largerTargets: newQuickSettings.largerTargets,
-            buttonTargeting: newQuickSettings.buttonTargeting
           },
         };
         updateStorageSettings(updatedSettings);
@@ -134,7 +139,26 @@ const Popup = () => {
               Quick Controls
             </h2>
             
-            {/* --- FOCUS MODE TOGGLE --- */}
+            {/* --- NEW FONT SIZE SLIDER --- */}
+            <Card className="p-4">
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="font-medium text-foreground">Font Size</p>
+                    <span className="text-xs text-muted-foreground">
+                      {quickSettings.fontSize}%
+                    </span>
+                  </div>
+                  <Slider
+                    value={[quickSettings.fontSize]}
+                    onValueChange={([value]) => handleSettingChange("fontSize", value)}
+                    min={50}
+                    max={300}
+                    step={10}
+                  />
+                </div>
+            </Card>
+            {/* --- END FONT SIZE SLIDER --- */}
+
             <Card className="p-4">
               <div className="flex items-center justify-between">
                 <div>
@@ -143,11 +167,10 @@ const Popup = () => {
                 </div>
                 <Switch
                   checked={quickSettings.focusMode}
-                  onCheckedChange={() => handleToggle("focusMode")}
+                  onCheckedChange={(checked) => handleSettingChange("focusMode", checked)}
                 />
               </div>
             </Card>
-            {/* --- END FOCUS MODE --- */}
             
             <Card className="p-4">
               <div className="flex items-center justify-between">
@@ -157,7 +180,7 @@ const Popup = () => {
                 </div>
                 <Switch
                   checked={quickSettings.motionBlocker}
-                  onCheckedChange={() => handleToggle("motionBlocker")}
+                  onCheckedChange={(checked) => handleSettingChange("motionBlocker", checked)}
                 />
               </div>
             </Card>
@@ -170,7 +193,7 @@ const Popup = () => {
                 </div>
                 <Switch
                   checked={quickSettings.readAloud}
-                  onCheckedChange={() => handleToggle("readAloud")}
+                  onCheckedChange={(checked) => handleSettingChange("readAloud", checked)}
                 />
               </div>
             </Card>
@@ -183,20 +206,7 @@ const Popup = () => {
                 </div>
                 <Switch
                   checked={quickSettings.largerTargets}
-                  onCheckedChange={() => handleToggle("largerTargets")}
-                />
-              </div>
-            </Card>
-            
-            <Card className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="font-medium text-foreground">Button Targeting</p>
-                  <p className="text-xs text-muted-foreground">Guide cursor</p>
-                </div>
-                <Switch
-                  checked={quickSettings.buttonTargeting}
-                  onCheckedChange={() => handleToggle("buttonTargeting")}
+                  onCheckedChange={(checked) => handleSettingChange("largerTargets", checked)}
                 />
               </div>
             </Card>
