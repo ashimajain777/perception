@@ -33,32 +33,31 @@ const defaultSettings = {
     motionBlocker: false, 
     altTextGenerator: false, 
     readAloud: false,
-    fontSize: 100, // <-- NEW
-    fontStyle: 'default' // <-- NEW
+    fontSize: 100,
+    fontStyle: 'default'
   },
   motor: { largerTargets: false, buttonTargeting: false, voiceCommands: false, gestureControls: false }
 };
 
 // 2. Open onboarding, set defaults, and create context menu on install
+// ... (This function remains the same as before) ...
 chrome.runtime.onInstalled.addListener((details) => {
   if (details.reason === 'install') {
     chrome.tabs.create({ url: chrome.runtime.getURL('index.html#/onboarding') });
     chrome.storage.local.set({ extensionSettings: defaultSettings });
     chrome.storage.local.set({ onboardingComplete: false });
   }
-  // Create context menus based on default settings
   chrome.storage.local.get(['extensionSettings'], (result) => {
     updateContextMenus(result.extensionSettings || defaultSettings);
   });
 });
 
+
 // 3. Helper to create/remove context menus based on settings
+// ... (This function remains the same as before) ...
 function updateContextMenus(settings) {
-  chrome.contextMenus.removeAll(); // Clear all existing menus first
-
+  chrome.contextMenus.removeAll();
   if (!settings || !settings.enabled) return;
-
-  // Create Simplifier menu ONLY if enabled
   if (settings.cognitive?.simplifier) {
     chrome.contextMenus.create({
       id: "simplify-text",
@@ -66,8 +65,6 @@ function updateContextMenus(settings) {
       contexts: ["selection"]
     });
   }
-
-  // Create Alt Text menu ONLY if enabled
   if (settings.visual?.altTextGenerator) {
     chrome.contextMenus.create({
       id: "generate-alt-text",
@@ -78,6 +75,7 @@ function updateContextMenus(settings) {
 }
 
 // 4. Handle the right-click menu click
+// ... (This function remains the same as before) ...
 chrome.contextMenus.onClicked.addListener((info, tab) => {
   if (info.menuItemId === "simplify-text" && info.selectionText) {
     handleTextSimplification(info.selectionText, tab.id);
@@ -88,6 +86,7 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
 });
 
 // 5. Helper to notify content scripts when settings change
+// ... (This function remains the same as before) ...
 function notifyTabsOfSettingsUpdate(settings) {
   chrome.tabs.query({}, (tabs) => {
     tabs.forEach(tab => {
@@ -102,12 +101,12 @@ function notifyTabsOfSettingsUpdate(settings) {
 }
 
 // 6. Helper to update settings (called by AI)
+// ... (This function remains the same as before) ...
 async function updateSettings(newSettings) {
   return new Promise((resolve) => {
     chrome.storage.local.set({ extensionSettings: newSettings }, () => {
       notifyTabsOfSettingsUpdate(newSettings);
-      updateContextMenus(newSettings); // Update menus on change
-      // Also notify the popup/chatbot UI
+      updateContextMenus(newSettings);
       chrome.runtime.sendMessage({ action: 'settingsUpdated', settings: newSettings }).catch(err => console.log(`AccessAI: ${err.message}`));
       resolve();
     });
@@ -123,7 +122,6 @@ async function handleAIChat(prompt) {
   let settings = result.extensionSettings || defaultSettings;
   
   // --- Step 1: Check for Problem Recommendations ---
-  
   if (lowerPrompt.includes('dizzy') || lowerPrompt.includes('motion') || lowerPrompt.includes('animations')) {
     return handleAIChat("turn on motion blocker");
   }
@@ -142,21 +140,48 @@ async function handleAIChat(prompt) {
   if (lowerPrompt.includes('cant use mouse') || lowerPrompt.includes('use my voice')) {
      return handleAIChat("turn on voice commands");
   }
-  // --- NEW AI FONT COMMANDS ---
   if (lowerPrompt.includes('text is small') || lowerPrompt.includes('font size bigger') || lowerPrompt.includes('make text larger')) {
      return handleAIChat("increase font size");
   }
   if (lowerPrompt.includes('text is too big') || lowerPrompt.includes('font size smaller') || lowerPrompt.includes('make text smaller')) {
      return handleAIChat("decrease font size");
   }
-  if (lowerPrompt.includes('dyslexia') || lowerPrompt.includes('opendyslexic')) {
-     return handleAIChat("set font style to opendyslexic");
-  }
-
+  
   // --- Step 2: Check for Direct Commands ("Tool Calling") ---
   let commandResponse = null;
 
-  // --- NEW FONT COMMANDS ---
+  // --- NEW FONT COMMANDS (Data-driven) ---
+  const fontCommandMap = {
+    'roboto': 'roboto',
+    'open sans': 'opensans',
+    'lato': 'lato',
+    'montserrat': 'montserrat',
+    'noto sans': 'notosans',
+    'merriweather': 'merriweather',
+    'lora': 'lora',
+    'inter': 'inter',
+    'poppins': 'poppins',
+    'source sans': 'sourcesans',
+    'opendyslexic': 'opendyslexic'
+  };
+
+  // Check for font style commands
+  for (const name in fontCommandMap) {
+    if (lowerPrompt.includes(name)) {
+      const styleValue = fontCommandMap[name];
+      settings.visual.fontStyle = styleValue;
+      await updateSettings(settings);
+      // Capitalize font name for response
+      const readableName = name.split(' ').map(s => s.charAt(0).toUpperCase() + s.substring(1)).join(' ');
+      commandResponse = `I've set the font to ${readableName}.`;
+      return { response: commandResponse, settings: settings };
+    }
+  }
+  if (lowerPrompt.includes('reset font') || lowerPrompt.includes('default font')) {
+    return handleAIChat("set font style to default");
+  }
+
+  // Check for font size commands
   if (lowerPrompt.startsWith('increase font size')) {
     settings.visual.fontSize = Math.min(300, (settings.visual.fontSize || 100) + 25);
     await updateSettings(settings);
@@ -173,20 +198,10 @@ async function handleAIChat(prompt) {
         await updateSettings(settings);
         commandResponse = `I've set the font size to ${size}%.`;
      }
-  } else if (lowerPrompt.includes('font style')) {
-     if (lowerPrompt.includes('opendyslexic')) {
-        settings.visual.fontStyle = 'opendyslexic';
-        await updateSettings(settings);
-        commandResponse = "I've enabled the OpenDyslexic font for you.";
-     } else if (lowerPrompt.includes('readable') || lowerPrompt.includes('sans-serif')) {
-        settings.visual.fontStyle = 'readable';
-        await updateSettings(settings);
-        commandResponse = "Switching to a readable sans-serif font.";
-     } else if (lowerPrompt.includes('default') || lowerPrompt.includes('reset')) {
-        settings.visual.fontStyle = 'default';
-        await updateSettings(settings);
-        commandResponse = "I've reset the font style to the page default.";
-     }
+  } else if (lowerPrompt.includes('set font style to default')) {
+      settings.visual.fontStyle = 'default';
+      await updateSettings(settings);
+      commandResponse = "I've reset the font style to the page default.";
   }
   // --- END NEW FONT COMMANDS ---
 
@@ -200,18 +215,52 @@ async function handleAIChat(prompt) {
     settings.cognitive = { ...settings.cognitive, simplifier: enable };
     await updateSettings(settings);
     commandResponse = enable ? "Okay, the Text Simplifier is on. Right-click selected text to use it." : "Text Simplifier is now off.";
-  } else if (lowerPrompt.includes('motion blocker') || lowerPrompt.includes('animation')) {
+  } 
+  // ... (other commands remain the same: motion blocker, larger targets, etc.) ...
+  else if (lowerPrompt.includes('motion blocker') || lowerPrompt.includes('animation')) {
     const enable = !lowerPrompt.includes('disable') && !lowerPrompt.includes('turn off');
     settings.visual = { ...settings.visual, motionBlocker: enable };
     await updateSettings(settings);
-    commandResponse = enable ? "Done. Motion Blocker is now active." : "Motion Blocker is disabled.";
+    commandResponse = enable ? "Done. Motion Blocker is now active." : "Motion Blocker is now off.";
   } else if (lowerPrompt.includes('larger targets') || lowerPrompt.includes('bigger buttons')) {
     const enable = !lowerPrompt.includes('disable') && !lowerPrompt.includes('turn off');
     settings.motor = { ...settings.motor, largerTargets: enable };
     await updateSettings(settings);
     commandResponse = enable ? "I've turned on Larger Click Targets." : "Larger Click Targets are now off.";
-  } 
-  // ... (other commands remain the same) ...
+  } else if (lowerPrompt.includes('button targeting') || lowerPrompt.includes('cursor guide')) {
+    const enable = !lowerPrompt.includes('disable') && !lowerPrompt.includes('turn off');
+    settings.motor = { ...settings.motor, buttonTargeting: enable };
+    await updateSettings(settings);
+    commandResponse = enable ? "Button Targeting is now on." : "Button Targeting is now off.";
+  } else if (lowerPrompt.includes('voice command')) {
+    const enable = !lowerPrompt.includes('disable') && !lowerPrompt.includes('turn off');
+    settings.motor = { ...settings.motor, voiceCommands: enable };
+    await updateSettings(settings);
+    commandResponse = enable ? "Voice Commands are enabled. You can now say things like 'scroll down'." : "Voice Commands are disabled.";
+  } else if (lowerPrompt.includes('read aloud')) {
+    const enable = !lowerPrompt.includes('disable') && !lowerPrompt.includes('turn off');
+    settings.visual = { ...settings.visual, readAloud: enable };
+    await updateSettings(settings);
+    commandResponse = enable ? "Spatial Read-Aloud is on. Click on a paragraph to hear it." : "Spatial Read-Aloud is off.";
+  } else if (lowerPrompt.includes('alt text')) {
+    const enable = !lowerPrompt.includes('disable') && !lowerPrompt.includes('turn off');
+    settings.visual = { ...settings.visual, altTextGenerator: enable };
+    await updateSettings(settings);
+    commandResponse = enable ? "AI Alt Text generator is on. Right-click an image to use it." : "AI Alt Text generator is off.";
+  } else if (lowerPrompt.includes('contrast')) {
+    const enable = !lowerPrompt.includes('disable') && !lowerPrompt.includes('turn off');
+    settings.visual = { ...settings.visual, contrast: enable ? 150 : 100 };
+    await updateSettings(settings);
+    commandResponse = enable ? "I've increased the page contrast." : "I've reset the contrast to default.";
+  } else if (lowerPrompt.includes('extension') && (lowerPrompt.includes('disable') || lowerPrompt.includes('turn off'))) {
+    settings.enabled = false;
+    await updateSettings(settings);
+    commandResponse = "AccessAI extension has been disabled.";
+  } else if (lowerPrompt.includes('extension') && (lowerPrompt.includes('enable') || lowerPrompt.includes('turn on'))) {
+    settings.enabled = true;
+    await updateSettings(settings);
+    commandResponse = "AccessAI extension is now enabled.";
+  }
   
   if (commandResponse) {
     return { response: commandResponse, settings: settings };
@@ -264,8 +313,15 @@ async function handleTextSimplification(text, tabId) {
         text: data.text 
       }).catch(err => console.log(`AccessAI: Could not send to tab ${tabId}: ${err.message}`));
     }
+
   } catch (error) {
-    // ... (error handling)
+    console.error("Simplification Error:", error.message);
+    if (tabId) {
+      chrome.tabs.sendMessage(tabId, {
+        action: 'simplifiedTextResponse',
+        text: `Error simplifying text: ${error.message}`
+      }).catch(err => console.log(`AccessAI: Could not send to tab ${tabId}: ${err.message}`));
+    }
   }
 }
 
@@ -296,7 +352,15 @@ async function handleImageDescription(srcUrl, tabId) {
         srcUrl: srcUrl
       }).catch(err => console.log(`AccessAI: Could not send to tab ${tabId}: ${err.message}`));
     }
+
   } catch (error) {
-    // ... (error handling)
+    console.error("Alt Text Error:", error.message);
+     if (tabId) {
+      chrome.tabs.sendMessage(tabId, {
+        action: 'altTextResponse',
+        text: `Error generating alt text: ${error.message}`,
+        srcUrl: srcUrl
+      }).catch(err => console.log(`AccessAI: Could not send to tab ${tabId}: ${err.message}`));
+    }
   }
 }
