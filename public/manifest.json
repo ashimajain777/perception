@@ -5,13 +5,11 @@
   "description": "Customize and enhance your web experience with AI-driven accessibility tools",
   "permissions": [
     "storage",
+    "session",
     "activeTab",
     "scripting",
     "contextMenus",
-    "tabs",
-    "scripting",
-    "storage",
-    "session"
+    "tabs"
   ],
   "host_permissions": [
     "<all_urls>",
