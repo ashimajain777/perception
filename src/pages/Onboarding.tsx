@@ -16,6 +16,7 @@ interface AccessibilityNeed {
 }
 
 const accessibilityNeeds: AccessibilityNeed[] = [
+  // ... (same as before)
   {
     id: "adhd",
     category: "cognitive",
@@ -101,7 +102,7 @@ const Onboarding = () => {
       return;
     }
 
-    // 1. Get the default settings
+    // 1. Get the default settings (which now include fontSize and fontStyle)
     chrome.runtime.sendMessage({ action: 'getSettings' }, (settings) => {
       if (chrome.runtime.lastError || !settings) {
          toast({ title: "Error", description: "Could not load default settings. Please reload.", variant: "destructive" });
@@ -112,11 +113,16 @@ const Onboarding = () => {
       if (selectedNeeds.includes('adhd') || selectedNeeds.includes('cognitive-overload')) {
         settings.cognitive.focusMode = true;
       }
+       // NEW: Set font for dyslexia
+      if (selectedNeeds.includes('dyslexia')) {
+        settings.visual.fontStyle = 'opendyslexic';
+      }
       if (selectedNeeds.includes('photosensitivity')) {
         settings.visual.motionBlocker = true;
       }
       if (selectedNeeds.includes('low-vision')) {
         settings.visual.contrast = 150; // Set a default contrast
+        settings.visual.fontSize = 120; // Set a slightly larger font
       }
       if (selectedNeeds.includes('motor-precision')) {
         settings.motor.largerTargets = true;
