@@ -111,7 +111,7 @@ const Index = () => {
                 suggest personalized adjustments.
               </p>
               <div className="flex gap-4">
-                <Button size="lg">
+                <Button size="lg" disabled>
                   <Zap className="w-5 h-5 mr-2" />
                   Try AI Assistant
                 </Button>
