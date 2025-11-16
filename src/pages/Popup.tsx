@@ -14,7 +14,8 @@ const Popup = () => {
     focusMode: false,
     motionBlocker: false,
     largerTargets: false,
-    buttonTargeting: false, // --- NEW ---
+    buttonTargeting: false,
+    readAloud: false, // --- NEW ---
   });
 
   useEffect(() => {
@@ -27,7 +28,8 @@ const Popup = () => {
           focusMode: parsed.cognitive?.focusMode || false,
           motionBlocker: parsed.visual?.motionBlocker || false,
           largerTargets: parsed.motor?.largerTargets || false,
-          buttonTargeting: parsed.motor?.buttonTargeting || false, // --- NEW ---
+          buttonTargeting: parsed.motor?.buttonTargeting || false,
+          readAloud: parsed.visual?.readAloud || false, // --- NEW ---
         });
       }
     });
@@ -41,7 +43,8 @@ const Popup = () => {
           focusMode: parsed.cognitive?.focusMode || false,
           motionBlocker: parsed.visual?.motionBlocker || false,
           largerTargets: parsed.motor?.largerTargets || false,
-          buttonTargeting: parsed.motor?.buttonTargeting || false, // --- NEW ---
+          buttonTargeting: parsed.motor?.buttonTargeting || false,
+          readAloud: parsed.visual?.readAloud || false, // --- NEW ---
         });
       }
     };
@@ -66,11 +69,15 @@ const Popup = () => {
         const updatedSettings = {
           ...settings,
           cognitive: { ...settings.cognitive, focusMode: newQuickSettings.focusMode },
-          visual: { ...settings.visual, motionBlocker: newQuickSettings.motionBlocker },
+          visual: { 
+            ...settings.visual, 
+            motionBlocker: newQuickSettings.motionBlocker,
+            readAloud: newQuickSettings.readAloud // --- NEW ---
+          },
           motor: { 
             ...settings.motor, 
             largerTargets: newQuickSettings.largerTargets,
-            buttonTargeting: newQuickSettings.buttonTargeting // --- NEW ---
+            buttonTargeting: newQuickSettings.buttonTargeting
           },
         };
         updateStorageSettings(updatedSettings);
@@ -148,6 +155,22 @@ const Popup = () => {
                 />
               </div>
             </Card>
+            
+            {/* --- NEW: Read Aloud Quick Toggle --- */}
+            <Card className="p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-medium text-foreground">Read Aloud</p>
+                  <p className="text-xs text-muted-foreground">Click text to read</p>
+                </div>
+                <Switch
+                  checked={quickSettings.readAloud}
+                  onCheckedChange={() => handleToggle("readAloud")}
+                />
+              </div>
+            </Card>
+            {/* --- END NEW --- */}
+            
             <Card className="p-4">
               <div className="flex items-center justify-between">
                 <div>
@@ -161,7 +184,6 @@ const Popup = () => {
               </div>
             </Card>
             
-            {/* --- NEW: Button Targeting Quick Toggle --- */}
             <Card className="p-4">
               <div className="flex items-center justify-between">
                 <div>
@@ -174,7 +196,6 @@ const Popup = () => {
                 />
               </div>
             </Card>
-            {/* --- END NEW --- */}
 
           </div>
 
