@@ -15,6 +15,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       sendResponse({ success: true });
       // After saving, notify all active tabs to update their styles
       notifyTabsOfSettingsUpdate(request.settings);
+      // --- NEW: Update context menus based on settings ---
+      updateContextMenus(request.settings);
     });
     return true;
   }
@@ -28,12 +30,16 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 // --- SETTINGS (Defaults) ---
 const defaultSettings = {
   enabled: true,
-  cognitive: { simplifier: false, focusMode: false, chatbotEnabled: true },
+  cognitive: { 
+    simplifier: false, // This is the switch for our feature
+    focusMode: false, 
+    chatbotEnabled: true 
+  },
   visual: { 
     contrast: 100, 
     motionBlocker: false, 
-    altTextGenerator: false, // NEW
-    readAloud: false        // NEW
+    altTextGenerator: false,
+    readAloud: false
   },
   motor: { 
     largerTargets: false, 
@@ -56,37 +62,46 @@ chrome.runtime.onInstalled.addListener((details) => {
     chrome.storage.local.set({ onboardingComplete: false });
   }
 
-  // Create the right-click menu items
-  chrome.contextMenus.create({
-    id: "simplify-text",
-    title: "Simplify Text with AccessAI",
-    contexts: ["selection"] // Only show when text is selected
-  });
-
-  // --- NEW: Context menu for Alt Text ---
-  chrome.contextMenus.create({
-    id: "generate-alt-text",
-    title: "Generate Alt Text with AccessAI",
-    contexts: ["image"] // Only show for images
+  // Create context menus based on default settings
+  chrome.storage.local.get(['extensionSettings'], (result) => {
+    updateContextMenus(result.extensionSettings || defaultSettings);
   });
 });
 
+// --- NEW: Helper to create/remove context menus based on settings ---
+function updateContextMenus(settings) {
+  // Remove all first to avoid duplicates
+  chrome.contextMenus.removeAll();
+
+  // Create Simplifier menu ONLY if enabled
+  if (settings.enabled && settings.cognitive?.simplifier) {
+    chrome.contextMenus.create({
+      id: "simplify-text",
+      title: "Simplify Text with AccessAI",
+      contexts: ["selection"] // Only show when text is selected
+    });
+  }
+
+  // Create Alt Text menu ONLY if enabled
+  if (settings.enabled && settings.visual?.altTextGenerator) {
+    chrome.contextMenus.create({
+      id: "generate-alt-text",
+      title: "Generate Alt Text with AccessAI",
+      contexts: ["image"] // Only show for images
+    });
+  }
+}
+
 // 3. Handle the right-click menu click
 chrome.contextMenus.onClicked.addListener((info, tab) => {
+  // We no longer need to check settings here, because the menu
+  // item wouldn't exist if the setting was disabled.
   if (info.menuItemId === "simplify-text" && info.selectionText) {
     handleTextSimplification(info.selectionText, tab.id);
   }
 
-  // --- NEW: Handle Alt Text click ---
   if (info.menuItemId === "generate-alt-text" && info.srcUrl) {
-    // Check settings before running
-    chrome.storage.local.get(['extensionSettings'], (result) => {
-      if (result.extensionSettings && result.extensionSettings.enabled && result.extensionSettings.visual?.altTextGenerator) {
-        handleImageDescription(info.srcUrl, tab.id);
-      } else {
-        console.log("AccessAI: Alt Text Generator is disabled in settings.");
-      }
-    });
+    handleImageDescription(info.srcUrl, tab.id);
   }
 });
 
@@ -94,7 +109,7 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
 function notifyTabsOfSettingsUpdate(settings) {
   chrome.tabs.query({}, (tabs) => {
     tabs.forEach(tab => {
-      if (tab.id && tab.url && !tab.url.startsWith("chrome://")) { // Avoid restricted chrome pages
+      if (tab.id && tab.url && !tab.url.startsWith("chrome://")) { 
         chrome.tabs.sendMessage(tab.id, { 
           action: 'settingsUpdated', 
           settings: settings 
@@ -109,7 +124,7 @@ async function updateSettings(newSettings) {
   return new Promise((resolve) => {
     chrome.storage.local.set({ extensionSettings: newSettings }, () => {
       notifyTabsOfSettingsUpdate(newSettings);
-      // Also notify the popup/chatbot UI
+      updateContextMenus(newSettings); // Update menus on change
       chrome.runtime.sendMessage({ action: 'settingsUpdated', settings: newSettings }).catch(err => console.log(`AccessAI: ${err.message}`));
       resolve();
     });
@@ -120,32 +135,38 @@ async function updateSettings(newSettings) {
 async function handleAIChat(prompt) {
   const lowerPrompt = prompt.toLowerCase();
   
-  // Get current settings
   const result = await chrome.storage.local.get(['extensionSettings']);
   let settings = result.extensionSettings || defaultSettings;
 
-  // "Tool Calling" - Check if the prompt is a command
   let commandResponse = null;
 
+  // --- FOCUS MODE COMMAND ---
   if (lowerPrompt.includes('focus mode')) {
     const enable = !lowerPrompt.includes('disable') && !lowerPrompt.includes('turn off');
     settings.cognitive = { ...settings.cognitive, focusMode: enable };
     await updateSettings(settings);
     commandResponse = enable ? "Focus Mode has been enabled." : "Focus Mode has been disabled.";
   
-  } else if (lowerPrompt.includes('motion blocker') || lowerPrompt.includes('animation')) {
+  // --- SIMPLIFIER COMMAND ---
+  } else if (lowerPrompt.includes('simplifier') || lowerPrompt.includes('simple text')) {
+    const enable = !lowerPrompt.includes('disable') && !lowerPrompt.includes('turn off');
+    settings.cognitive = { ...settings.cognitive, simplifier: enable };
+    await updateSettings(settings);
+    commandResponse = enable ? "Text Simplifier is now on. Right-click selected text to use it." : "Text Simplifier is off.";
+
+  } else if (lowerPrompt.includes('motion blocker')) {
     const enable = !lowerPrompt.includes('disable') && !lowerPrompt.includes('turn off');
     settings.visual = { ...settings.visual, motionBlocker: enable };
     await updateSettings(settings);
     commandResponse = enable ? "Motion Blocker is now active." : "Motion Blocker is now off.";
   
-  } else if (lowerPrompt.includes('larger targets') || lowerPrompt.includes('bigger buttons')) {
+  } else if (lowerPrompt.includes('larger targets')) {
     const enable = !lowerPrompt.includes('disable') && !lowerPrompt.includes('turn off');
     settings.motor = { ...settings.motor, largerTargets: enable };
     await updateSettings(settings);
     commandResponse = enable ? "Larger click targets are on." : "Larger click targets are off.";
   
-  } else if (lowerPrompt.includes('button targeting') || lowerPrompt.includes('cursor guide')) {
+  } else if (lowerPrompt.includes('button targeting')) {
     const enable = !lowerPrompt.includes('disable') && !lowerPrompt.includes('turn off');
     settings.motor = { ...settings.motor, buttonTargeting: enable };
     await updateSettings(settings);
@@ -155,27 +176,25 @@ async function handleAIChat(prompt) {
     const enable = !lowerPrompt.includes('disable') && !lowerPrompt.includes('turn off');
     settings.motor = { ...settings.motor, voiceCommands: enable };
     await updateSettings(settings);
-    commandResponse = enable ? "Voice Commands are now enabled. Try saying 'Scroll down'!" : "Voice Commands are now disabled.";
+    commandResponse = enable ? "Voice Commands are now enabled." : "Voice Commands are now disabled.";
   
-  // --- NEW: Chat commands for new features ---
-  } else if (lowerPrompt.includes('read aloud') || lowerPrompt.includes('read this')) {
+  } else if (lowerPrompt.includes('read aloud')) {
     const enable = !lowerPrompt.includes('disable') && !lowerPrompt.includes('turn off');
     settings.visual = { ...settings.visual, readAloud: enable };
     await updateSettings(settings);
-    commandResponse = enable ? "Spatial Read-Aloud is now on. Click on a paragraph to hear it." : "Spatial Read-Aloud is off.";
+    commandResponse = enable ? "Spatial Read-Aloud is now on." : "Spatial Read-Aloud is off.";
   
-  } else if (lowerPrompt.includes('alt text') || lowerPrompt.includes('describe images')) {
+  } else if (lowerPrompt.includes('alt text')) {
     const enable = !lowerPrompt.includes('disable') && !lowerPrompt.includes('turn off');
     settings.visual = { ...settings.visual, altTextGenerator: enable };
     await updateSettings(settings);
-    commandResponse = enable ? "AI Alt Text generator is now on. Right-click an image to use it." : "AI Alt Text generator is off.";
+    commandResponse = enable ? "AI Alt Text generator is now on." : "AI Alt Text generator is off.";
   
   } else if (lowerPrompt.includes('contrast')) {
     const enable = !lowerPrompt.includes('disable') && !lowerPrompt.includes('turn off');
-    settings.visual = { ...settings.visual, contrast: enable ? 150 : 100 }; // Set to 150% or default 100%
+    settings.visual = { ...settings.visual, contrast: enable ? 150 : 100 };
     await updateSettings(settings);
     commandResponse = enable ? "Contrast has been increased." : "Contrast has been reset to default.";
-  // --- END NEW COMMANDS ---
 
   } else if (lowerPrompt.includes('extension') && (lowerPrompt.includes('disable') || lowerPrompt.includes('turn off'))) {
     settings.enabled = false;
@@ -191,36 +210,26 @@ async function handleAIChat(prompt) {
     return { response: commandResponse, settings: settings };
   }
 
-  // "Text Generation" - Call your new proxy server
+  // "Text Generation" - Call your proxy server
   try {
     const response = await fetch("http://localhost:3001/api/chat", {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        prompt: prompt 
-      })
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt: prompt })
     });
-
-    if (!response.ok) {
-      throw new Error(`Proxy server error: ${response.statusText}`);
-    }
-
+    if (!response.ok) throw new Error(`Proxy server error: ${response.statusText}`);
     const data = await response.json();
-    
     return { response: data.text, settings: settings };
-
   } catch (error) {
     console.error("Chat Error:", error.message);
     if (error.message.includes('Failed to fetch')) {
       return { response: "Sorry, I can't connect to the AI. Is the local proxy server running?", settings: settings };
     }
-    return { response: "Sorry, I'm having trouble connecting to the AI. Please try again later.", settings: settings };
+    return { response: "Sorry, I'm having trouble connecting to the AI.", settings: settings };
   }
 }
 
-// 7. Handle Text Simplification
+// 7. Handle Text Simplification (This is the backend for the Simplifier feature)
 async function handleTextSimplification(text, tabId) {
   try {
     const response = await fetch("http://localhost:3001/api/chat", {
@@ -230,21 +239,14 @@ async function handleTextSimplification(text, tabId) {
         prompt: `Please simplify the following text:\n\n"${text}"`
       })
     });
-
-    if (!response.ok) {
-      throw new Error(`Proxy server error: ${response.statusText}`);
-    }
-
+    if (!response.ok) throw new Error(`Proxy server error: ${response.statusText}`);
     const data = await response.json();
-    const simplifiedText = data.text;
-
     if (tabId) {
       chrome.tabs.sendMessage(tabId, { 
         action: 'simplifiedTextResponse', 
-        text: simplifiedText 
+        text: data.text 
       }).catch(err => console.log(`AccessAI: Could not send to tab ${tabId}: ${err.message}`));
     }
-
   } catch (error) {
     console.error("Simplification Error:", error.message);
     if (tabId) {
@@ -256,11 +258,9 @@ async function handleTextSimplification(text, tabId) {
   }
 }
 
-// 8. --- NEW: Handle Image Description (Alt Text) ---
+// 8. Handle Image Description (Alt Text)
 async function handleImageDescription(srcUrl, tabId) {
   try {
-    // We use the same chat endpoint and a prompt that asks Gemini to describe an image from a URL.
-    // This assumes your proxy server is configured to handle such a prompt.
     const response = await fetch("http://localhost:3001/api/chat", {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -270,23 +270,15 @@ async function handleImageDescription(srcUrl, tabId) {
                  Image URL: ${srcUrl}`
       })
     });
-
-    if (!response.ok) {
-      throw new Error(`Proxy server error: ${response.statusText}`);
-    }
-
+    if (!response.ok) throw new Error(`Proxy server error: ${response.statusText}`);
     const data = await response.json();
-    const altText = data.text;
-
-    // Send the generated alt text back to the content script
     if (tabId) {
       chrome.tabs.sendMessage(tabId, { 
         action: 'altTextResponse', 
-        text: altText,
-        srcUrl: srcUrl // Send the URL back so the content script can find the image
+        text: data.text,
+        srcUrl: srcUrl
       }).catch(err => console.log(`AccessAI: Could not send to tab ${tabId}: ${err.message}`));
     }
-
   } catch (error) {
     console.error("Alt Text Error:", error.message);
     if (tabId) {
