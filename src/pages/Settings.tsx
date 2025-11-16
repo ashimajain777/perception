@@ -3,7 +3,14 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
-import { Slider } from "@/components/ui/slider";
+import { Slider } from "@/components/ui/slider"; // <-- NEW
+import { // <-- NEW
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Brain, Eye, Hand, ArrowLeft } from "lucide-react";
 import { useNavigate } from "react-router-dom";
@@ -21,6 +28,8 @@ interface Settings {
     motionBlocker: boolean;
     altTextGenerator: boolean;
     readAloud: boolean;
+    fontSize: number; // <-- NEW
+    fontStyle: string; // <-- NEW
   };
   motor: {
     largerTargets: boolean;
@@ -42,6 +51,8 @@ const defaultSettings: Settings = {
     motionBlocker: false,
     altTextGenerator: false,
     readAloud: false,
+    fontSize: 100, // <-- NEW
+    fontStyle: 'default', // <-- NEW
   },
   motor: {
     largerTargets: false,
@@ -64,7 +75,7 @@ const Settings = () => {
         ...defaultSettings,
         ...result,
         cognitive: { ...defaultSettings.cognitive, ...result?.cognitive },
-        visual: { ...defaultSettings.visual, ...result?.visual },
+        visual: { ...defaultSettings.visual, ...result?.visual }, // <-- UPDATED MERGE
         motor: { ...defaultSettings.motor, ...result?.motor },
       };
       if (result) {
@@ -140,7 +151,8 @@ const Settings = () => {
 
         {/* Extension Status */}
         <Card className="p-6">
-          <div className="flex items-center justify-between">
+           {/* ... (This card remains the same) ... */}
+           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-xl font-semibold text-foreground">
                 Extension Status
@@ -160,7 +172,8 @@ const Settings = () => {
 
         {/* Cognitive Adaptation */}
         <Card className="p-6">
-          <div className="flex items-center gap-3 mb-4">
+           {/* ... (This card remains the same) ... */}
+           <div className="flex items-center gap-3 mb-4">
             <Brain className="w-6 h-6 text-cognitive" />
             <h2 className="text-2xl font-semibold text-foreground">
               Cognitive Adaptation
@@ -179,8 +192,6 @@ const Settings = () => {
                 }
               />
             </div>
-            
-            {/* --- SIMPLIFIER SWITCH --- */}
             <Separator />
             <div className="flex items-center justify-between">
               <div>
@@ -194,9 +205,6 @@ const Settings = () => {
                 }
               />
             </div>
-            {/* --- END SIMPLIFIER --- */}
-
-            {/* --- FOCUS MODE SWITCH --- */}
             <Separator />
             <div className="flex items-center justify-between">
               <div>
@@ -210,7 +218,6 @@ const Settings = () => {
                 }
               />
             </div>
-            {/* --- END FOCUS MODE --- */}
           </div>
         </Card>
 
@@ -223,6 +230,52 @@ const Settings = () => {
             </h2>
           </div>
           <div className="space-y-4">
+
+            {/* --- NEW FONT SIZE SLIDER --- */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <p className="font-medium text-foreground">Font Size</p>
+                <span className="text-sm text-muted-foreground">
+                  {settings.visual.fontSize}%
+                </span>
+              </div>
+              <Slider
+                value={[settings.visual.fontSize]}
+                onValueChange={([value]) =>
+                  handleSettingChange('visual', 'fontSize', value)
+                }
+                min={50} max={300} step={10}
+              />
+            </div>
+            <Separator />
+            
+            {/* --- NEW FONT STYLE SELECT --- */}
+            <div>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-medium text-foreground">Font Style</p>
+                  <p className="text-sm text-muted-foreground">Apply a reading-focused font</p>
+                </div>
+                 <Select
+                  value={settings.visual.fontStyle}
+                  onValueChange={(value) =>
+                    handleSettingChange('visual', 'fontStyle', value)
+                  }
+                >
+                  <SelectTrigger className="w-[180px]">
+                    <SelectValue placeholder="Select font" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="default">Default</SelectItem>
+                    <SelectItem value="readable">Readable (Sans-Serif)</SelectItem>
+                    <SelectItem value="monospaced">Monospaced</SelectItem>
+                    <SelectItem value="opendyslexic">OpenDyslexic</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <Separator />
+            
             <div>
               <div className="flex items-center justify-between mb-2">
                 <p className="font-medium text-foreground">Contrast Level</p>
@@ -240,7 +293,8 @@ const Settings = () => {
             </div>
             <Separator />
             <div className="flex items-center justify-between">
-              <div>
+               {/* ... (Motion Blocker) ... */}
+               <div>
                 <p className="font-medium text-foreground">Motion Blocker</p>
                 <p className="text-sm text-muted-foreground">Pause or slow down animations and GIFs</p>
               </div>
@@ -253,6 +307,7 @@ const Settings = () => {
             </div>
             <Separator />
             <div className="flex items-center justify-between">
+              {/* ... (Alt Text Generator) ... */}
               <div>
                 <p className="font-medium text-foreground">AI Alt Text Generator</p>
                 <p className="text-sm text-muted-foreground">Generate image descriptions (Right-click an image)</p>
@@ -266,6 +321,7 @@ const Settings = () => {
             </div>
             <Separator />
             <div className="flex items-center justify-between">
+              {/* ... (Read Aloud) ... */}
               <div>
                 <p className="font-medium text-foreground">Spatial Read-Aloud</p>
                 <p className="text-sm text-muted-foreground">Click on text to read it aloud with highlighting</p>
@@ -282,7 +338,8 @@ const Settings = () => {
         
         {/* Motor Adaptation */}
         <Card className="p-6">
-          <div className="flex items-center gap-3 mb-4">
+           {/* ... (This card remains the same) ... */}
+           <div className="flex items-center gap-3 mb-4">
             <Hand className="w-6 h-6 text-motor" />
             <h2 className="text-2xl font-semibold text-foreground">
               Motor Adaptation
