@@ -24,7 +24,7 @@ interface Settings {
   };
   motor: {
     largerTargets: boolean;
-    buttonTargeting: boolean;
+    buttonTargeting: boolean; 
     voiceCommands: boolean;
     gestureControls: boolean;
   };
