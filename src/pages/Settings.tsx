@@ -3,8 +3,8 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
-import { Slider } from "@/components/ui/slider"; // <-- NEW
-import { // <-- NEW
+import { Slider } from "@/components/ui/slider";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -28,8 +28,8 @@ interface Settings {
     motionBlocker: boolean;
     altTextGenerator: boolean;
     readAloud: boolean;
-    fontSize: number; // <-- NEW
-    fontStyle: string; // <-- NEW
+    fontSize: number;
+    fontStyle: string;
   };
   motor: {
     largerTargets: boolean;
@@ -51,8 +51,8 @@ const defaultSettings: Settings = {
     motionBlocker: false,
     altTextGenerator: false,
     readAloud: false,
-    fontSize: 100, // <-- NEW
-    fontStyle: 'default', // <-- NEW
+    fontSize: 100,
+    fontStyle: 'default',
   },
   motor: {
     largerTargets: false,
@@ -61,6 +61,24 @@ const defaultSettings: Settings = {
     gestureControls: false,
   },
 };
+
+// --- NEW FONT OPTIONS LIST ---
+const fontOptions = [
+  { value: 'default', label: 'Default Font' },
+  { value: 'roboto', label: 'Roboto (Sans-Serif)' },
+  { value: 'opensans', label: 'Open Sans (Sans-Serif)' },
+  { value: 'lato', label: 'Lato (Sans-Serif)' },
+  { value: 'montserrat', label: 'Montserrat (Sans-Serif)' },
+  { value: 'notosans', label: 'Noto Sans (Sans-Serif)' },
+  { value: 'inter', label: 'Inter (Sans-Serif)' },
+  { value: 'poppins', label: 'Poppins (Sans-Serif)' },
+  { value: 'sourcesans', label: 'Source Sans 3 (Sans-Serif)' },
+  { value: 'merriweather', label: 'Merriweather (Serif)' },
+  { value: 'lora', label: 'Lora (Serif)' },
+  { value: 'opendyslexic', label: 'OpenDyslexic (Accessibility)' },
+];
+// --- END NEW FONT OPTIONS LIST ---
+
 
 const Settings = () => {
   const navigate = useNavigate();
@@ -75,7 +93,7 @@ const Settings = () => {
         ...defaultSettings,
         ...result,
         cognitive: { ...defaultSettings.cognitive, ...result?.cognitive },
-        visual: { ...defaultSettings.visual, ...result?.visual }, // <-- UPDATED MERGE
+        visual: { ...defaultSettings.visual, ...result?.visual },
         motor: { ...defaultSettings.motor, ...result?.motor },
       };
       if (result) {
@@ -134,7 +152,8 @@ const Settings = () => {
       <div className="max-w-4xl mx-auto space-y-6">
         {/* Header */}
         <div className="flex items-center gap-4">
-          <Button
+           {/* ... (This section remains the same) ... */}
+           <Button
             variant="ghost"
             size="icon"
             onClick={() => navigate("/")}
@@ -231,7 +250,7 @@ const Settings = () => {
           </div>
           <div className="space-y-4">
 
-            {/* --- NEW FONT SIZE SLIDER --- */}
+            {/* --- FONT SIZE SLIDER --- */}
             <div>
               <div className="flex items-center justify-between mb-2">
                 <p className="font-medium text-foreground">Font Size</p>
@@ -249,7 +268,7 @@ const Settings = () => {
             </div>
             <Separator />
             
-            {/* --- NEW FONT STYLE SELECT --- */}
+            {/* --- UPDATED FONT STYLE SELECT --- */}
             <div>
               <div className="flex items-center justify-between">
                 <div>
@@ -262,19 +281,21 @@ const Settings = () => {
                     handleSettingChange('visual', 'fontStyle', value)
                   }
                 >
-                  <SelectTrigger className="w-[180px]">
+                  <SelectTrigger className="w-[240px]">
                     <SelectValue placeholder="Select font" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="default">Default</SelectItem>
-                    <SelectItem value="readable">Readable (Sans-Serif)</SelectItem>
-                    <SelectItem value="monospaced">Monospaced</SelectItem>
-                    <SelectItem value="opendyslexic">OpenDyslexic</SelectItem>
+                    {fontOptions.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
             </div>
             <Separator />
+            {/* --- END FONT STYLE SELECT --- */}
             
             <div>
               <div className="flex items-center justify-between mb-2">
@@ -348,7 +369,7 @@ const Settings = () => {
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="font-medium text-foreground">Larger Click Targets</p>
+                <p className="font-m-medium text-foreground">Larger Click Targets</p>
                 <p className="text-sm text-muted-foreground">Make buttons and links easier to click</p>
               </div>
               <Switch
@@ -361,7 +382,7 @@ const Settings = () => {
             <Separator />
             <div className="flex items-center justify-between">
               <div>
-                <p className="font-medium text-foreground">Button Targeting</p>
+                <p className="font-m-medium text-foreground">Button Targeting</p>
                 <p className="text-sm text-muted-foreground">Guides cursor to links and buttons</p>
               </div>
               <Switch
@@ -374,7 +395,7 @@ const Settings = () => {
             <Separator />
             <div className="flex items-center justify-between">
                <div>
-                <p className="font-medium text-foreground">Voice Commands</p>
+                <p className="font-m-medium text-foreground">Voice Commands</p>
                 <p className="text-sm text-muted-foreground">Control navigation with voice (e.g., "scroll down")</p>
               </div>
               <Switch
@@ -387,7 +408,7 @@ const Settings = () => {
             <Separator />
             <div className="flex items-center justify-between">
               <div>
-                <p className="font-medium text-foreground">Gesture Controls</p>
+                <p className="font-m-medium text-foreground">Gesture Controls</p>
                 <p className="text-sm text-muted-foreground">Use gestures for complex actions (Coming Soon)</p>
               </div>
               <Switch
