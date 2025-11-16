@@ -20,9 +20,9 @@ const Popup = () => {
 
   useEffect(() => {
     // 1. Load settings from chrome.storage
-    chrome.storage.local.get("extensionSettings", (result) => {
-      if (result.extensionSettings) {
-        const parsed = result.extensionSettings;
+    chrome.runtime.sendMessage({ action: 'getSettings' }, (result) => {
+      if (result) {
+        const parsed = result;
         setEnabled(parsed.enabled);
         setQuickSettings({
           focusMode: parsed.cognitive?.focusMode || false,
@@ -64,8 +64,8 @@ const Popup = () => {
     const newQuickSettings = { ...quickSettings, [key]: !quickSettings[key] };
     setQuickSettings(newQuickSettings);
 
-    chrome.storage.local.get("extensionSettings", (result) => {
-        const settings = result.extensionSettings || {};
+    chrome.runtime.sendMessage({ action: 'getSettings' }, (result) => {
+        const settings = result || {};
         const updatedSettings = {
           ...settings,
           cognitive: { 
@@ -89,8 +89,8 @@ const Popup = () => {
 
   const handleEnabledToggle = (checked: boolean) => {
     setEnabled(checked);
-    chrome.storage.local.get("extensionSettings", (result) => {
-        const settings = result.extensionSettings || {};
+    chrome.runtime.sendMessage({ action: 'getSettings' }, (result) => {
+        const settings = result || {};
         settings.enabled = checked;
         updateStorageSettings(settings);
     });
