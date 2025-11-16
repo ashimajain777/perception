@@ -15,7 +15,7 @@ const Popup = () => {
     motionBlocker: false,
     largerTargets: false,
     buttonTargeting: false,
-    readAloud: false, // --- NEW ---
+    readAloud: false,
   });
 
   useEffect(() => {
@@ -29,7 +29,7 @@ const Popup = () => {
           motionBlocker: parsed.visual?.motionBlocker || false,
           largerTargets: parsed.motor?.largerTargets || false,
           buttonTargeting: parsed.motor?.buttonTargeting || false,
-          readAloud: parsed.visual?.readAloud || false, // --- NEW ---
+          readAloud: parsed.visual?.readAloud || false,
         });
       }
     });
@@ -44,7 +44,7 @@ const Popup = () => {
           motionBlocker: parsed.visual?.motionBlocker || false,
           largerTargets: parsed.motor?.largerTargets || false,
           buttonTargeting: parsed.motor?.buttonTargeting || false,
-          readAloud: parsed.visual?.readAloud || false, // --- NEW ---
+          readAloud: parsed.visual?.readAloud || false,
         });
       }
     };
@@ -68,11 +68,14 @@ const Popup = () => {
         const settings = result.extensionSettings || {};
         const updatedSettings = {
           ...settings,
-          cognitive: { ...settings.cognitive, focusMode: newQuickSettings.focusMode },
+          cognitive: { 
+            ...settings.cognitive, 
+            focusMode: newQuickSettings.focusMode // <-- Focus Mode toggle
+          },
           visual: { 
             ...settings.visual, 
             motionBlocker: newQuickSettings.motionBlocker,
-            readAloud: newQuickSettings.readAloud // --- NEW ---
+            readAloud: newQuickSettings.readAloud
           },
           motor: { 
             ...settings.motor, 
@@ -93,7 +96,6 @@ const Popup = () => {
     });
   };
 
-  // This function opens your main dashboard (Index.tsx) in a new tab.
   const openChatInterface = () => {
     chrome.tabs.create({
       url: chrome.runtime.getURL('index.html#/')
@@ -131,6 +133,8 @@ const Popup = () => {
             <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
               Quick Controls
             </h2>
+            
+            {/* --- FOCUS MODE TOGGLE --- */}
             <Card className="p-4">
               <div className="flex items-center justify-between">
                 <div>
@@ -143,6 +147,8 @@ const Popup = () => {
                 />
               </div>
             </Card>
+            {/* --- END FOCUS MODE --- */}
+            
             <Card className="p-4">
               <div className="flex items-center justify-between">
                 <div>
@@ -156,7 +162,6 @@ const Popup = () => {
               </div>
             </Card>
             
-            {/* --- NEW: Read Aloud Quick Toggle --- */}
             <Card className="p-4">
               <div className="flex items-center justify-between">
                 <div>
@@ -169,7 +174,6 @@ const Popup = () => {
                 />
               </div>
             </Card>
-            {/* --- END NEW --- */}
             
             <Card className="p-4">
               <div className="flex items-center justify-between">
