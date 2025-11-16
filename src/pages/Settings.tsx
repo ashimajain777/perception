@@ -109,7 +109,6 @@ const Settings = () => {
   };
 
   const handleReset = () => {
-    // Reset onboarding status in Chrome storage
     chrome.storage.local.set({ onboardingComplete: false }, () => {
       toast({
         title: "Onboarding Reset",
@@ -122,7 +121,7 @@ const Settings = () => {
   return (
     <div className="min-h-screen bg-background p-6">
       <div className="max-w-4xl mx-auto space-y-6">
-        {/* ... Header remains the same ... */}
+        {/* Header */}
         <div className="flex items-center gap-4">
           <Button
             variant="ghost"
@@ -139,9 +138,9 @@ const Settings = () => {
           </div>
         </div>
 
+        {/* Extension Status */}
         <Card className="p-6">
           <div className="flex items-center justify-between">
-            {/* ... Extension Status ... */}
             <div>
               <h2 className="text-xl font-semibold text-foreground">
                 Extension Status
@@ -159,8 +158,8 @@ const Settings = () => {
           </div>
         </Card>
 
+        {/* Cognitive Adaptation */}
         <Card className="p-6">
-          {/* ... Cognitive Adaptation ... */}
           <div className="flex items-center gap-3 mb-4">
             <Brain className="w-6 h-6 text-cognitive" />
             <h2 className="text-2xl font-semibold text-foreground">
@@ -180,6 +179,8 @@ const Settings = () => {
                 }
               />
             </div>
+            
+            {/* --- SIMPLIFIER SWITCH --- */}
             <Separator />
             <div className="flex items-center justify-between">
               <div>
@@ -193,6 +194,9 @@ const Settings = () => {
                 }
               />
             </div>
+            {/* --- END SIMPLIFIER --- */}
+
+            {/* --- FOCUS MODE SWITCH --- */}
             <Separator />
             <div className="flex items-center justify-between">
               <div>
@@ -206,11 +210,12 @@ const Settings = () => {
                 }
               />
             </div>
+            {/* --- END FOCUS MODE --- */}
           </div>
         </Card>
 
+        {/* Visual Adaptation */}
         <Card className="p-6">
-          {/* ... Visual Adaptation ... */}
           <div className="flex items-center gap-3 mb-4">
             <Eye className="w-6 h-6 text-visual" />
             <h2 className="text-2xl font-semibold text-foreground">
@@ -246,8 +251,6 @@ const Settings = () => {
                 }
               />
             </div>
-             
-            {/* --- NEW: Enabled AI Alt Text --- */}
             <Separator />
             <div className="flex items-center justify-between">
               <div>
@@ -261,8 +264,6 @@ const Settings = () => {
                 }
               />
             </div>
-            
-            {/* --- NEW: Enabled Spatial Read-Aloud --- */}
             <Separator />
             <div className="flex items-center justify-between">
               <div>
@@ -279,8 +280,8 @@ const Settings = () => {
           </div>
         </Card>
         
+        {/* Motor Adaptation */}
         <Card className="p-6">
-          {/* ... Motor Adaptation ... */}
           <div className="flex items-center gap-3 mb-4">
             <Hand className="w-6 h-6 text-motor" />
             <h2 className="text-2xl font-semibold text-foreground">
@@ -300,7 +301,6 @@ const Settings = () => {
                 }
               />
             </div>
-            
             <Separator />
             <div className="flex items-center justify-between">
               <div>
@@ -314,7 +314,6 @@ const Settings = () => {
                 }
               />
             </div>
-
             <Separator />
             <div className="flex items-center justify-between">
                <div>
@@ -345,6 +344,7 @@ const Settings = () => {
           </div>
         </Card>
 
+        {/* Save Button */}
         <div className="flex gap-4 justify-end">
           <Button variant="outline" onClick={handleReset}>
             Reset Onboarding
