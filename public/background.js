@@ -49,8 +49,10 @@ chrome.runtime.onInstalled.addListener((details) => {
 function updateContextMenus(settings) {
   chrome.contextMenus.removeAll(); // Clear all existing menus first
 
+  if (!settings || !settings.enabled) return;
+
   // Create Simplifier menu ONLY if enabled
-  if (settings.enabled && settings.cognitive?.simplifier) {
+  if (settings.cognitive?.simplifier) {
     chrome.contextMenus.create({
       id: "simplify-text",
       title: "Simplify Text with AccessAI",
@@ -59,7 +61,7 @@ function updateContextMenus(settings) {
   }
 
   // Create Alt Text menu ONLY if enabled
-  if (settings.enabled && settings.visual?.altTextGenerator) {
+  if (settings.visual?.altTextGenerator) {
     chrome.contextMenus.create({
       id: "generate-alt-text",
       title: "Generate Alt Text with AccessAI",
@@ -105,12 +107,8 @@ async function updateSettings(newSettings) {
   });
 }
 
-// 7. --- MODIFIED: AI Chatbot "Brain" ---
-// This function now handles:
-// 1. Follow-up actions (like "yes" to a recommendation)
-// 2. Direct commands (like "turn on focus mode")
-// 3. Problem recommendations (like "I get dizzy")
-// 4. Generic chat (fallback to proxy)
+// 7. --- NEW AI Chatbot "Brain" ---
+// This function now directly implements suggestions.
 async function handleAIChat(prompt) {
   const lowerPrompt = prompt.toLowerCase();
   
@@ -118,23 +116,31 @@ async function handleAIChat(prompt) {
   const result = await chrome.storage.local.get(['extensionSettings']);
   let settings = result.extensionSettings || defaultSettings;
   
-  // --- Step 1: Check for follow-up commands ---
-  const session = await chrome.storage.session.get(['pendingAction']);
-  const pendingAction = session.pendingAction;
+  // --- Step 1: Check for Problem Recommendations ---
+  // This section handles understanding user problems and IMPLEMENTS the solution.
+  
+  if (lowerPrompt.includes('dizzy') || lowerPrompt.includes('motion') || lowerPrompt.includes('animations') || lowerPrompt.includes('moving too fast')) {
+    return handleAIChat("turn on motion blocker"); // Directly execute the command
+  }
+  
+  if (lowerPrompt.includes('distracted') || lowerPrompt.includes('ads') || lowerPrompt.includes('sidebar') || lowerPrompt.includes('too much clutter')) {
+    return handleAIChat("turn on focus mode");
+  }
+  
+  if (lowerPrompt.includes('hard to read') || lowerPrompt.includes('text is small') || lowerPrompt.includes('words are confusing')) {
+     return handleAIChat("turn on simplifier");
+  }
+  
+  if (lowerPrompt.includes('hard to click') || lowerPrompt.includes('buttons are small') || lowerPrompt.includes('keep missing')) {
+     return handleAIChat("turn on larger targets");
+  }
 
-  if (pendingAction) {
-    // User said "yes" to our recommendation
-    if (lowerPrompt === 'yes' || lowerPrompt === 'ok' || lowerPrompt.includes('yes please')) {
-      await chrome.storage.session.remove('pendingAction'); // Clear the action
-      // The pendingAction *is* the command we need to run.
-      // We re-run handleAIChat with the command.
-      return handleAIChat(pendingAction.command);
-    }
-    // User said "no"
-    if (lowerPrompt === 'no' || lowerPrompt === 'no thanks' || lowerPrompt.includes("don't")) {
-      await chrome.storage.session.remove('pendingAction');
-      return { response: "Okay, I won't change anything. Let me know if you need help with anything else!", settings: settings };
-    }
+  if (lowerPrompt.includes('lose my place') || lowerPrompt.includes('follow along') || lowerPrompt.includes('read to me')) {
+     return handleAIChat("turn on read aloud");
+  }
+  
+  if (lowerPrompt.includes('cant use mouse') || lowerPrompt.includes('use my voice') || lowerPrompt.includes('speak to page')) {
+     return handleAIChat("turn on voice commands");
   }
 
   // --- Step 2: Check for Direct Commands ("Tool Calling") ---
@@ -145,22 +151,22 @@ async function handleAIChat(prompt) {
     const enable = !lowerPrompt.includes('disable') && !lowerPrompt.includes('turn off');
     settings.cognitive = { ...settings.cognitive, focusMode: enable };
     await updateSettings(settings);
-    commandResponse = enable ? "Focus Mode has been enabled." : "Focus Mode has been disabled.";
+    commandResponse = enable ? "I've enabled Focus Mode for you." : "I've disabled Focus Mode.";
   } else if (lowerPrompt.includes('simplifier')) {
     const enable = !lowerPrompt.includes('disable') && !lowerPrompt.includes('turn off');
     settings.cognitive = { ...settings.cognitive, simplifier: enable };
     await updateSettings(settings);
-    commandResponse = enable ? "Text Simplifier is now on. Right-click selected text to use it." : "Text Simplifier is off.";
+    commandResponse = enable ? "Okay, the Text Simplifier is on. Right-click selected text to use it." : "Text Simplifier is now off.";
   } else if (lowerPrompt.includes('motion blocker') || lowerPrompt.includes('animation')) {
     const enable = !lowerPrompt.includes('disable') && !lowerPrompt.includes('turn off');
     settings.visual = { ...settings.visual, motionBlocker: enable };
     await updateSettings(settings);
-    commandResponse = enable ? "Motion Blocker is now active." : "Motion Blocker is now off.";
+    commandResponse = enable ? "Done. Motion Blocker is now active." : "Motion Blocker is disabled.";
   } else if (lowerPrompt.includes('larger targets') || lowerPrompt.includes('bigger buttons')) {
     const enable = !lowerPrompt.includes('disable') && !lowerPrompt.includes('turn off');
     settings.motor = { ...settings.motor, largerTargets: enable };
     await updateSettings(settings);
-    commandResponse = enable ? "Larger click targets are on." : "Larger click targets are off.";
+    commandResponse = enable ? "I've turned on Larger Click Targets." : "Larger Click Targets are now off.";
   } else if (lowerPrompt.includes('button targeting') || lowerPrompt.includes('cursor guide')) {
     const enable = !lowerPrompt.includes('disable') && !lowerPrompt.includes('turn off');
     settings.motor = { ...settings.motor, buttonTargeting: enable };
@@ -170,22 +176,22 @@ async function handleAIChat(prompt) {
     const enable = !lowerPrompt.includes('disable') && !lowerPrompt.includes('turn off');
     settings.motor = { ...settings.motor, voiceCommands: enable };
     await updateSettings(settings);
-    commandResponse = enable ? "Voice Commands are now enabled." : "Voice Commands are now disabled.";
+    commandResponse = enable ? "Voice Commands are enabled. You can now say things like 'scroll down'." : "Voice Commands are disabled.";
   } else if (lowerPrompt.includes('read aloud')) {
     const enable = !lowerPrompt.includes('disable') && !lowerPrompt.includes('turn off');
     settings.visual = { ...settings.visual, readAloud: enable };
     await updateSettings(settings);
-    commandResponse = enable ? "Spatial Read-Aloud is now on." : "Spatial Read-Aloud is off.";
+    commandResponse = enable ? "Spatial Read-Aloud is on. Click on a paragraph to hear it." : "Spatial Read-Aloud is off.";
   } else if (lowerPrompt.includes('alt text')) {
     const enable = !lowerPrompt.includes('disable') && !lowerPrompt.includes('turn off');
     settings.visual = { ...settings.visual, altTextGenerator: enable };
     await updateSettings(settings);
-    commandResponse = enable ? "AI Alt Text generator is now on." : "AI Alt Text generator is off.";
+    commandResponse = enable ? "AI Alt Text generator is on. Right-click an image to use it." : "AI Alt Text generator is off.";
   } else if (lowerPrompt.includes('contrast')) {
     const enable = !lowerPrompt.includes('disable') && !lowerPrompt.includes('turn off');
     settings.visual = { ...settings.visual, contrast: enable ? 150 : 100 };
     await updateSettings(settings);
-    commandResponse = enable ? "Contrast has been increased." : "Contrast has been reset to default.";
+    commandResponse = enable ? "I've increased the page contrast." : "I've reset the contrast to default.";
   } else if (lowerPrompt.includes('extension') && (lowerPrompt.includes('disable') || lowerPrompt.includes('turn off'))) {
     settings.enabled = false;
     await updateSettings(settings);
@@ -200,40 +206,7 @@ async function handleAIChat(prompt) {
     return { response: commandResponse, settings: settings };
   }
   
-  // --- Step 3: Check for Problem Recommendations ---
-  // This section handles understanding user problems.
-  
-  if (lowerPrompt.includes('dizzy') || lowerPrompt.includes('motion') || lowerPrompt.includes('animations') || lowerPrompt.includes('moving too fast')) {
-    await chrome.storage.session.set({ pendingAction: { command: "turn on motion blocker" } });
-    return { response: "It sounds like all the motion might be bothering you. I can enable the 'Motion Blocker' to pause animations. Would you like me to do that?", settings: settings };
-  }
-  
-  if (lowerPrompt.includes('distracted') || lowerPrompt.includes('ads') || lowerPrompt.includes('sidebar') || lowerPrompt.includes('too much clutter')) {
-    await chrome.storage.session.set({ pendingAction: { command: "turn on focus mode" } });
-    return { response: "It sounds like there are a lot of distractions on the page. I can enable 'Focus Mode' to fade out ads and sidebars. Would you like me to do that?", settings: settings };
-  }
-  
-  if (lowerPrompt.includes('hard to read') || lowerPrompt.includes('text is small') || lowerPrompt.includes('words are confusing')) {
-     await chrome.storage.session.set({ pendingAction: { command: "turn on simplifier" } });
-     return { response: "It sounds like the text is hard to read. I can enable the 'Text Simplifier' so you can right-click text to make it simpler. Would you like me to do that?", settings: settings };
-  }
-  
-  if (lowerPrompt.includes('hard to click') || lowerPrompt.includes('buttons are small') || lowerPrompt.includes('keep missing')) {
-     await chrome.storage.session.set({ pendingAction: { command: "turn on larger targets" } });
-     return { response: "It sounds like the buttons might be too small. I can enable 'Larger Click Targets' to make them easier to click. Would you like me to do that?", settings: settings };
-  }
-
-  if (lowerPrompt.includes('lose my place') || lowerPrompt.includes('follow along') || lowerPrompt.includes('read to me')) {
-     await chrome.storage.session.set({ pendingAction: { command: "turn on read aloud" } });
-     return { response: "It sounds like it's hard to follow the text. I can enable 'Spatial Read-Aloud' which highlights words as they are read to you. Would you like me to do that?", settings: settings };
-  }
-  
-  if (lowerPrompt.includes('cant use mouse') || lowerPrompt.includes('use my voice') || lowerPrompt.includes('speak to page')) {
-     await chrome.storage.session.set({ pendingAction: { command: "turn on voice commands" } });
-     return { response: "It sounds like you'd prefer to use your voice. I can enable 'Voice Commands' to let you control the page by speaking (e.g., 'scroll down'). Would you like me to do that?", settings: settings };
-  }
-
-  // --- Step 4: Fallback to Proxy Server ---
+  // --- Step 3: Fallback to Proxy Server ---
   // If no commands or problems are detected, just chat.
   try {
     const response = await fetch("http://localhost:3001/api/chat", {
